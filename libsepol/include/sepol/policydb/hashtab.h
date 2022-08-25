@@ -110,6 +110,12 @@ extern int hashtab_map(hashtab_t h,
 
 extern void hashtab_hash_eval(hashtab_t h, char *tag);
 
+/* Checks if the hashtab is empty (its size is zero) */
+static inline int hashtab_is_empty(hashtab_t h)
+{
+	return !h || !h->size;
+}
+
 #ifdef __cplusplus
 }
 #endif
