@@ -51,7 +51,6 @@
 #define DISPLAY_AVBLOCK_ROLE_ALLOW	4
 #define DISPLAY_AVBLOCK_REQUIRES	5
 #define DISPLAY_AVBLOCK_DECLARES	6
-#define DISPLAY_AVBLOCK_FILENAME_TRANS	7
 
 static policydb_t policydb;
 extern unsigned int ss_initialized;
@@ -292,6 +291,8 @@ static int display_avrule(avrule_t * avrule, policydb_t * policy,
 				   policy, fp);
 	} else if (avrule->specified & AVRULE_TYPE) {
 		display_id(policy, fp, SYM_TYPES, avrule->perms->data - 1, "");
+		if (avrule->object_name)
+			fprintf(fp, " \"%s\"", avrule->object_name);
 	} else if (avrule->specified & AVRULE_XPERMS) {
 		avtab_extended_perms_t xperms;
 		int i;
@@ -509,18 +510,6 @@ static void display_role_allow(role_allow_rule_t * ra, policydb_t * p, FILE * fp
 	}
 }
 
-static void display_filename_trans(filename_trans_rule_t * tr, policydb_t * p, FILE * fp)
-{
-	fprintf(fp, "filename transition");
-	for (; tr; tr = tr->next) {
-		display_type_set(&tr->stypes, 0, p, fp);
-		display_type_set(&tr->ttypes, 0, p, fp);
-		display_id(p, fp, SYM_CLASSES, tr->tclass - 1, ":");
-		display_id(p, fp, SYM_TYPES, tr->otype - 1, "");
-		fprintf(fp, " %s\n", tr->name);
-	}
-}
-
 static int role_display_callback(hashtab_key_t key __attribute__((unused)),
 			  hashtab_datum_t datum, void *data)
 {
@@ -685,10 +674,6 @@ static int display_avdecl(avrule_decl_t * decl, int field,
 			}
 			break;
 		}
-	case DISPLAY_AVBLOCK_FILENAME_TRANS:
-		display_filename_trans(decl->filename_trans_rules, policy,
-				       out_fp);
-		break;
 	default:{
 			assert(0);
 		}
@@ -859,7 +844,6 @@ static int menu(void)
 	printf("c)  Display policy capabilities\n");
 	printf("l)  Link in a module\n");
 	printf("u)  Display the unknown handling setting\n");
-	printf("F)  Display filename_trans rules\n");
 	printf("\n");
 	printf("f)  set output file\n");
 	printf("m)  display menu\n");
@@ -1004,11 +988,6 @@ int main(int argc, char **argv)
 			}
 			if (out_fp != stdout)
 				printf("\nOutput to file: %s\n", OutfileName);
-			break;
-		case 'F':
-			fprintf(out_fp, "filename_trans rules:\n");
-			display_avblock(DISPLAY_AVBLOCK_FILENAME_TRANS,
-					&policydb, out_fp);
 			break;
 		case 'l':
 			link_module(&policydb, out_fp);
