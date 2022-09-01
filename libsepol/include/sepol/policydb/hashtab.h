@@ -116,6 +116,14 @@ static inline int hashtab_is_empty(hashtab_t h)
 	return !h || !h->size;
 }
 
+/* Returns number of elements in the hashtab h or 0 is h is NULL */
+static inline uint32_t hashtab_nel(hashtab_t h)
+{
+	if (!h)
+		return 0;
+	return h->nel;
+}
+
 #ifdef __cplusplus
 }
 #endif
