@@ -125,6 +125,12 @@ EXPANDATTRIBUTE |
 expandattribute                 { return(EXPANDATTRIBUTE); }
 TYPE_TRANSITION |
 type_transition			{ return(TYPE_TRANSITION); }
+MATCH_EXACT |
+match_exact			{ return(MATCH_EXACT); }
+MATCH_PREFIX |
+match_prefix			{ return(MATCH_PREFIX); }
+MATCH_SUFFIX |
+match_suffix			{ return(MATCH_SUFFIX); }
 TYPE_MEMBER |
 type_member			{ return(TYPE_MEMBER); }
 TYPE_CHANGE |
