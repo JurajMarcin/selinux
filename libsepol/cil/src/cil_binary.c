@@ -975,42 +975,57 @@ static int __cil_insert_type_rule(policydb_t *pdb, uint32_t kind, uint32_t src, 
 	int rc = SEPOL_OK;
 	avtab_key_t avtab_key;
 	avtab_datum_t avtab_datum;
+	avtab_trans_t trans;
 	avtab_ptr_t existing;	
 
 	avtab_key.source_type = src;
 	avtab_key.target_type = tgt;
 	avtab_key.target_class = obj;
 
+	memset(&avtab_datum, 0, sizeof(avtab_datum_t));
+	memset(&trans, 0, sizeof(avtab_trans_t));
+
 	switch (kind) {
 	case CIL_TYPE_TRANSITION:
 		avtab_key.specified = AVTAB_TRANSITION;
+		trans.otype = res;
+		avtab_datum.trans = &trans;
 		break;
 	case CIL_TYPE_CHANGE:
 		avtab_key.specified = AVTAB_CHANGE;
+		avtab_datum.data = res;
 		break;
 	case CIL_TYPE_MEMBER:
 		avtab_key.specified = AVTAB_MEMBER;
+		avtab_datum.data = res;
 		break;
 	default:
 		rc = SEPOL_ERR;
 		goto exit;
 	}
-
-	avtab_datum.data = res;
 	
 	existing = avtab_search_node(&pdb->te_avtab, &avtab_key);
-	if (existing) {
+	/*
+	 * There might be empty transition node containing filename transitions
+	 * only. That is okay, we can merge them later.
+	 */
+	if (existing && !(existing->key.specified & AVTAB_TRANSITION &&
+	    !existing->datum.trans->otype)) {
 		/* Don't add duplicate type rule and warn if they conflict.
 		 * A warning should have been previously given if there is a
 		 * non-duplicate rule using the same key.
 		 */
-		if (existing->datum.data != res) {
+		uint32_t existing_otype =
+			existing->key.specified & AVTAB_TRANSITION
+			? existing->datum.trans->otype
+			: existing->datum.data;
+		if (existing_otype != res) {
 			cil_log(CIL_ERR, "Conflicting type rules (scontext=%s tcontext=%s tclass=%s result=%s), existing=%s\n",
 				pdb->p_type_val_to_name[src - 1],
 				pdb->p_type_val_to_name[tgt - 1],
 				pdb->p_class_val_to_name[obj - 1],
 				pdb->p_type_val_to_name[res - 1],
-				pdb->p_type_val_to_name[existing->datum.data - 1]);
+				pdb->p_type_val_to_name[existing_otype - 1]);
 			cil_log(CIL_ERR, "Expanded from type rule (scontext=%s tcontext=%s tclass=%s result=%s)\n",
 				cil_rule->src_str, cil_rule->tgt_str, cil_rule->obj_str, cil_rule->result_str);
 			rc = SEPOL_ERR;
@@ -1019,7 +1034,13 @@ static int __cil_insert_type_rule(policydb_t *pdb, uint32_t kind, uint32_t src, 
 	}
 
 	if (!cond_node) {
-		rc = avtab_insert(&pdb->te_avtab, &avtab_key, &avtab_datum);
+		/* If we have node from empty filename transition, use it */
+		if (existing && existing->key.specified & AVTAB_TRANSITION &&
+		    !existing->datum.trans->otype)
+			existing->datum.trans->otype = avtab_datum.trans->otype;
+		else
+			rc = avtab_insert(&pdb->te_avtab, &avtab_key,
+					  &avtab_datum);
 	} else {
 		existing = avtab_search_node(&pdb->te_cond_avtab, &avtab_key);
 		if (existing) {
@@ -1037,13 +1058,17 @@ static int __cil_insert_type_rule(policydb_t *pdb, uint32_t kind, uint32_t src, 
 
 			search_datum = cil_cond_av_list_search(&avtab_key, other_list);
 			if (search_datum == NULL) {
-				if (existing->datum.data != res) {
+				uint32_t existing_otype =
+					existing->key.specified & AVTAB_TRANSITION
+					? existing->datum.trans->otype
+					: existing->datum.data;
+				if (existing_otype != res) {
 					cil_log(CIL_ERR, "Conflicting type rules (scontext=%s tcontext=%s tclass=%s result=%s), existing=%s\n",
 						pdb->p_type_val_to_name[src - 1],
 						pdb->p_type_val_to_name[tgt - 1],
 						pdb->p_class_val_to_name[obj - 1],
 						pdb->p_type_val_to_name[res - 1],
-						pdb->p_type_val_to_name[existing->datum.data - 1]);
+						pdb->p_type_val_to_name[existing_otype - 1]);
 					cil_log(CIL_ERR, "Expanded from type rule (scontext=%s tcontext=%s tclass=%s result=%s)\n",
 						cil_rule->src_str, cil_rule->tgt_str, cil_rule->obj_str, cil_rule->result_str);
 					rc = SEPOL_ERR;
@@ -1168,23 +1193,26 @@ static int __cil_typetransition_to_avtab_helper(policydb_t *pdb,
 						type_datum_t *sepol_src,
 						type_datum_t *sepol_tgt,
 						struct cil_list *class_list,
-						char *name,
+						char *name, uint8_t name_match,
 						type_datum_t *sepol_result)
 {
 	int rc;
 	class_datum_t *sepol_obj = NULL;
 	uint32_t otype;
 	struct cil_list_item *c;
+	avtab_key_t avt_key;
 
 	cil_list_for_each(c, class_list) {
 		rc = __cil_get_sepol_class_datum(pdb, DATUM(c->data), &sepol_obj);
 		if (rc != SEPOL_OK) return rc;
 
-		rc = policydb_filetrans_insert(
-			pdb, sepol_src->s.value, sepol_tgt->s.value,
-			sepol_obj->s.value, name, NULL,
-			sepol_result->s.value, &otype
-		);
+		avt_key.specified = AVTAB_TRANSITION;
+		avt_key.source_type = sepol_src->s.value;
+		avt_key.target_type = sepol_tgt->s.value;
+		avt_key.target_class = sepol_obj->s.value;
+		rc = avtab_insert_filename_trans(&pdb->te_avtab, &avt_key,
+			sepol_result->s.value, name, name_match,
+			&otype);
 		if (rc != SEPOL_OK) {
 			if (rc == SEPOL_EEXIST) {
 				if (sepol_result->s.value!= otype) {
@@ -1252,7 +1280,7 @@ static int __cil_typetransition_to_avtab(policydb_t *pdb, const struct cil_db *d
 
 			rc = __cil_typetransition_to_avtab_helper(
 				pdb, sepol_src, sepol_src, class_list,
-				name, sepol_result
+				name, typetrans->name_match, sepol_result
 			);
 			if (rc != SEPOL_OK) goto exit;
 		}
@@ -1270,7 +1298,7 @@ static int __cil_typetransition_to_avtab(policydb_t *pdb, const struct cil_db *d
 
 				rc = __cil_typetransition_to_avtab_helper(
 					pdb, sepol_src, sepol_tgt, class_list,
-					name, sepol_result
+					name, typetrans->name_match, sepol_result
 				);
 				if (rc != SEPOL_OK) goto exit;
 			}
@@ -4623,6 +4651,8 @@ static avrule_t *__cil_init_sepol_avrule(uint32_t kind, struct cil_tree_node *no
 	__cil_init_sepol_type_set(&avrule->stypes);
 	__cil_init_sepol_type_set(&avrule->ttypes);
 	avrule->perms = NULL;
+	avrule->object_name = NULL;
+	avrule->name_match = NAME_TRANS_MATCH_EXACT;
 	avrule->line = node->line;
 
 	avrule->source_filename = NULL;
@@ -4649,6 +4679,7 @@ static void __cil_destroy_sepol_avrules(avrule_t *curr)
 		ebitmap_destroy(&curr->stypes.negset);
 		ebitmap_destroy(&curr->ttypes.types);
 		ebitmap_destroy(&curr->ttypes.negset);
+		free(curr->object_name);
 		__cil_destroy_sepol_class_perms(curr->perms);
 		free(curr);
 		curr = next;

@@ -94,6 +94,7 @@ avtab_insert_node(avtab_t * h, int hvalue, avtab_ptr_t prev, avtab_key_t * key,
 		  avtab_datum_t * datum)
 {
 	avtab_ptr_t newnode;
+	avtab_trans_t *trans;
 	avtab_extended_perms_t *xperms;
 
 	newnode = (avtab_ptr_t) malloc(sizeof(struct avtab_node));
@@ -117,6 +118,16 @@ avtab_insert_node(avtab_t * h, int hvalue, avtab_ptr_t prev, avtab_key_t * key,
 		 * So copy data so it is set in the avtab
 		 */
 		newnode->datum.data = datum->data;
+	} else if (key->specified & AVTAB_TRANSITION) {
+		trans = calloc(1, sizeof(*trans));
+		if (trans == NULL) {
+			free(newnode);
+			return NULL;
+		}
+		if (datum->trans) /* else caller populates transition */
+			*trans = *(datum->trans);
+
+		newnode->datum.trans = trans;
 	} else {
 		newnode->datum = *datum;
 	}
@@ -304,6 +315,24 @@ avtab_ptr_t avtab_search_node_next(avtab_ptr_t node, int specified)
 	return NULL;
 }
 
+static int avtab_trans_destroy_helper(hashtab_key_t k, hashtab_datum_t d,
+				      void *a __attribute__ ((unused)))
+{
+	free(k);
+	free(d);
+	return 0;
+}
+
+void avtab_trans_destroy(avtab_trans_t *trans)
+{
+	hashtab_map(trans->name_trans.table, avtab_trans_destroy_helper, NULL);
+	symtab_destroy(&trans->name_trans);
+	hashtab_map(trans->prefix_trans.table, avtab_trans_destroy_helper, NULL);
+	symtab_destroy(&trans->prefix_trans);
+	hashtab_map(trans->suffix_trans.table, avtab_trans_destroy_helper, NULL);
+	symtab_destroy(&trans->suffix_trans);
+}
+
 void avtab_destroy(avtab_t * h)
 {
 	unsigned int i;
@@ -317,6 +346,9 @@ void avtab_destroy(avtab_t * h)
 		while (cur != NULL) {
 			if (cur->key.specified & AVTAB_XPERMS) {
 				free(cur->datum.xperms);
+			} else if (cur->key.specified & AVTAB_TRANSITION) {
+				avtab_trans_destroy(cur->datum.trans);
+				free(cur->datum.trans);
 			}
 			temp = cur;
 			cur = cur->next;
@@ -418,6 +450,96 @@ void avtab_hash_eval(avtab_t * h, char *tag)
 	     tag, h->nel, slots_used, h->nslot, max_chain_len);
 }
 
+static int avtab_read_name_trans(policy_file_t *fp, symtab_t *target)
+{
+	int rc;
+	uint32_t buf32[2], nel, i, len, *otype = NULL;
+	char *name = NULL;
+
+	/* read number of name transitions */
+	rc = next_entry(buf32, fp, sizeof(uint32_t) * 1);
+	if (rc < 0)
+		return rc;
+	nel = le32_to_cpu(buf32[0]);
+
+	rc = symtab_init(target, nel);
+	if (rc < 0)
+		return rc;
+
+	/* read name transitions */
+	for (i = 0; i < nel; i++) {
+		rc = SEPOL_ENOMEM;
+		otype = malloc(sizeof(uint32_t));
+		if (!otype)
+			goto exit;
+
+		/* read name transition otype and name length */
+		rc = next_entry(buf32, fp, sizeof(uint32_t) * 2);
+		if (rc < 0)
+			goto exit;
+		*otype = le32_to_cpu(buf32[0]);
+		len = le32_to_cpu(buf32[1]);
+
+		/* read the name */
+		rc = str_read(&name, fp, len);
+		if (rc < 0)
+			goto exit;
+
+		rc = hashtab_insert(target->table, name, otype);
+		if (rc < 0)
+			goto exit;
+		otype = NULL;
+		name = NULL;
+	}
+
+exit:
+	free(otype);
+	free(name);
+	return rc;
+}
+
+static int avtab_trans_read(policy_file_t *fp, uint32_t vers,
+			    avtab_trans_t *trans)
+{
+	int rc;
+	uint32_t buf32[1];
+
+	if (vers < POLICYDB_VERSION_AVTAB_FTRANS) {
+		rc = next_entry(buf32, fp, sizeof(uint32_t));
+		if (rc < 0) {
+			ERR(fp->handle, "truncated entry");
+			return SEPOL_ERR;
+		}
+		trans->otype = le32_to_cpu(*buf32);
+		return SEPOL_OK;
+	}
+
+	/* read otype */
+	rc = next_entry(buf32, fp, sizeof(uint32_t) * 1);
+	if (rc < 0)
+		return rc;
+	trans->otype = le32_to_cpu(buf32[0]);
+
+	rc = avtab_read_name_trans(fp, &trans->name_trans);
+	if (rc < 0)
+		goto bad;
+
+	if (vers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		rc = avtab_read_name_trans(fp, &trans->prefix_trans);
+		if (rc < 0)
+			goto bad;
+		rc = avtab_read_name_trans(fp, &trans->suffix_trans);
+		if (rc < 0)
+			goto bad;
+	}
+
+	return SEPOL_OK;
+
+bad:
+	avtab_trans_destroy(trans);
+	return rc;
+}
+
 /* Ordering of datums in the original avtab format in the policy file. */
 static const uint16_t spec_order[] = {
 	AVTAB_ALLOWED,
@@ -440,6 +562,7 @@ int avtab_read_item(struct policy_file *fp, uint32_t vers, avtab_t * a,
 	uint32_t buf32[8], items, items2, val;
 	avtab_key_t key;
 	avtab_datum_t datum;
+	avtab_trans_t trans;
 	avtab_extended_perms_t xperms;
 	unsigned set;
 	unsigned int i;
@@ -447,6 +570,7 @@ int avtab_read_item(struct policy_file *fp, uint32_t vers, avtab_t * a,
 
 	memset(&key, 0, sizeof(avtab_key_t));
 	memset(&datum, 0, sizeof(avtab_datum_t));
+	memset(&trans, 0, sizeof(avtab_trans_t));
 	memset(&xperms, 0, sizeof(avtab_extended_perms_t));
 
 	if (vers < POLICYDB_VERSION_AVTAB) {
@@ -509,7 +633,14 @@ int avtab_read_item(struct policy_file *fp, uint32_t vers, avtab_t * a,
 					return -1;
 				}
 				key.specified = spec_order[i] | enabled;
-				datum.data = le32_to_cpu(buf32[items++]);
+				if (key.specified & AVTAB_TRANSITION) {
+					trans.otype =
+						le32_to_cpu(buf32[items++]);
+					datum.trans = &trans;
+				} else {
+					datum.data =
+						le32_to_cpu(buf32[items++]);
+				}
 				rc = insertf(a, &key, &datum, p);
 				if (rc)
 					return rc;
@@ -571,6 +702,11 @@ int avtab_read_item(struct policy_file *fp, uint32_t vers, avtab_t * a,
 		for (i = 0; i < ARRAY_SIZE(xperms.perms); i++)
 			xperms.perms[i] = le32_to_cpu(buf32[i]);
 		datum.xperms = &xperms;
+	} else if (key.specified & AVTAB_TRANSITION) {
+		rc = avtab_trans_read(fp, vers, &trans);
+		if (rc < 0)
+			return -1;
+		datum.trans = &trans;
 	} else {
 		rc = next_entry(buf32, fp, sizeof(uint32_t));
 		if (rc < 0) {
@@ -629,4 +765,202 @@ int avtab_read(avtab_t * a, struct policy_file *fp, uint32_t vers)
       bad:
 	avtab_destroy(a);
 	return -1;
+}
+
+/* policydb filename transition compatibility */
+
+int avtab_insert_filename_trans(avtab_t *a, avtab_key_t *key,
+				uint32_t otype, const char *name,
+				uint8_t name_match, uint32_t *present_otype)
+{
+	int rc = SEPOL_ENOMEM;
+	avtab_trans_t new_trans = {0};
+	avtab_datum_t new_datum = {.trans = &new_trans};
+	avtab_datum_t *datum;
+	avtab_ptr_t node;
+	char *name_key = NULL;
+	uint32_t *otype_datum = NULL;
+	symtab_t *target_symtab;
+
+	datum = avtab_search(a, key);
+	if (!datum) {
+		/*
+		 * insert is actually unique, but with this function we can get
+		 * the inserted node and therefore the datum
+		 */
+		node = avtab_insert_nonunique(a, key, &new_datum);
+		if (!node)
+			return SEPOL_ENOMEM;
+		datum = &node->datum;
+	}
+
+	switch (name_match) {
+	case NAME_TRANS_MATCH_EXACT:
+		target_symtab = &datum->trans->name_trans;
+		break;
+	case NAME_TRANS_MATCH_PREFIX:
+		target_symtab = &datum->trans->prefix_trans;
+		break;
+	case NAME_TRANS_MATCH_SUFFIX:
+		target_symtab = &datum->trans->suffix_trans;
+		break;
+	default:
+		return SEPOL_ERR;
+	}
+
+	if (hashtab_is_empty(target_symtab->table)) {
+		rc = symtab_init(target_symtab, 1 << 8);
+		if (rc < 0)
+			return rc;
+	}
+
+	name_key = strdup(name);
+	if (!name_key)
+		goto bad;
+
+	otype_datum = malloc(sizeof(*otype_datum));
+	if (!otype_datum)
+		goto bad;
+	*otype_datum = otype;
+
+	rc = hashtab_insert(target_symtab->table, name_key, otype_datum);
+	if (rc < 0)
+		goto bad;
+
+	return SEPOL_OK;
+
+bad:
+	free(name_key);
+	free(otype_datum);
+	if (rc == SEPOL_EEXIST && present_otype) {
+		otype_datum = hashtab_search(datum->trans->name_trans.table,
+					     name);
+		if (otype_datum)
+			*present_otype = *otype_datum;
+	}
+	return rc;
+}
+
+static int filename_trans_read_one(avtab_t *a, void *fp)
+{
+	int rc;
+	uint32_t buf[4], len, otype;
+	char *name = NULL;
+	avtab_key_t key;
+
+	/* read length of the name and the name */
+	rc = next_entry(buf, fp, sizeof(uint32_t));
+	if (rc < 0)
+		return SEPOL_ERR;
+	len = le32_to_cpu(*buf);
+	rc = str_read(&name, fp, len);
+	if (rc < 0)
+		return SEPOL_ERR;
+
+	/* read stype, ttype, tclass and otype */
+	rc = next_entry(buf, fp, sizeof(uint32_t) * 4);
+	if (rc < 0)
+		goto err;
+
+	key.specified = AVTAB_TRANSITION;
+	key.source_type = le32_to_cpu(buf[0]);
+	key.target_type = le32_to_cpu(buf[1]);
+	key.target_class = le32_to_cpu(buf[2]);
+	otype = le32_to_cpu(buf[3]);
+
+	rc = avtab_insert_filename_trans(a, &key, otype, name,
+					 NAME_TRANS_MATCH_EXACT, NULL);
+	if (rc)
+		goto err;
+
+	free(name);
+	return SEPOL_OK;
+err:
+	free(name);
+	return SEPOL_ERR;
+}
+
+static int filename_trans_comp_read_one(avtab_t *a, void *fp)
+{
+	int rc;
+	uint32_t buf[3], len, ndatum, i, bit, otype;
+	char *name = NULL;
+	avtab_key_t key;
+	ebitmap_t stypes;
+	ebitmap_node_t *node;
+
+	/* read length of the name and the name */
+	rc = next_entry(buf, fp, sizeof(uint32_t));
+	if (rc < 0)
+		return SEPOL_ERR;
+	len = le32_to_cpu(*buf);
+	rc = str_read(&name, fp, len);
+	if (rc < 0)
+		return SEPOL_ERR;
+
+	/* read ttype, tclass, ndatum */
+	rc = next_entry(buf, fp, sizeof(uint32_t) * 3);
+	if (rc < 0)
+		goto err;
+
+	key.specified = AVTAB_TRANSITION;
+	key.target_type = le32_to_cpu(buf[0]);
+	key.target_class = le32_to_cpu(buf[1]);
+
+	ndatum = le32_to_cpu(buf[2]);
+	for (i = 0; i < ndatum; i++) {
+		rc = ebitmap_read(&stypes, fp);
+		if (rc < 0)
+			goto err;
+
+		rc = next_entry(buf, fp, sizeof(uint32_t));
+		if (rc < 0)
+			goto err_ebitmap;
+		otype = le32_to_cpu(*buf);
+
+		ebitmap_for_each_positive_bit(&stypes, node, bit) {
+			key.source_type = bit + 1;
+
+			rc = avtab_insert_filename_trans(a, &key, otype, name,
+							 NAME_TRANS_MATCH_EXACT,
+							 NULL);
+			if (rc < 0)
+				goto err_ebitmap;
+		}
+	}
+
+	free(name);
+	return SEPOL_OK;
+
+err_ebitmap:
+	ebitmap_destroy(&stypes);
+err:
+	free(name);
+	return rc;
+}
+
+int avtab_filename_trans_read(void *fp, uint32_t vers, avtab_t *a)
+{
+	uint32_t buf[1], nel, i;
+	int rc;
+
+	rc = next_entry(buf, fp, sizeof(uint32_t));
+	if (rc < 0)
+		return rc;
+	nel = le32_to_cpu(*buf);
+
+	if (vers < POLICYDB_VERSION_COMP_FTRANS) {
+		for (i = 0; i < nel; i++) {
+			rc = filename_trans_read_one(a, fp);
+			if (rc < 0)
+				return rc;
+		}
+	} else {
+		for (i = 0; i < nel; i++) {
+			rc = filename_trans_comp_read_one(a, fp);
+			if (rc < 0)
+				return rc;
+		}
+	}
+	return SEPOL_OK;
 }

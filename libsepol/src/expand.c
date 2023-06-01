@@ -1407,91 +1407,6 @@ static int copy_role_trans(expand_state_t * state, role_trans_rule_t * rules)
 	return 0;
 }
 
-static int expand_filename_trans_helper(expand_state_t *state,
-					filename_trans_rule_t *rule,
-					unsigned int s, unsigned int t)
-{
-	uint32_t mapped_otype, present_otype;
-	int rc;
-
-	mapped_otype = state->typemap[rule->otype - 1];
-
-	rc = policydb_filetrans_insert(
-		state->out, s + 1, t + 1,
-		rule->tclass, rule->name,
-		NULL, mapped_otype, &present_otype
-	);
-	if (rc == SEPOL_EEXIST) {
-		/* duplicate rule, ignore */
-		if (present_otype == mapped_otype)
-			return 0;
-
-		ERR(state->handle, "Conflicting name-based type_transition %s %s:%s \"%s\":  %s vs %s",
-		    state->out->p_type_val_to_name[s],
-		    state->out->p_type_val_to_name[t],
-		    state->out->p_class_val_to_name[rule->tclass - 1],
-		    rule->name,
-		    state->out->p_type_val_to_name[present_otype - 1],
-		    state->out->p_type_val_to_name[mapped_otype - 1]);
-		return -1;
-	} else if (rc < 0) {
-		ERR(state->handle, "Out of memory!");
-		return -1;
-	}
-	return 0;
-}
-
-static int expand_filename_trans(expand_state_t *state, filename_trans_rule_t *rules)
-{
-	unsigned int i, j;
-	filename_trans_rule_t *cur_rule;
-	ebitmap_t stypes, ttypes;
-	ebitmap_node_t *snode, *tnode;
-	int rc;
-
-	cur_rule = rules;
-	while (cur_rule) {
-		ebitmap_init(&stypes);
-		ebitmap_init(&ttypes);
-
-		if (expand_convert_type_set(state->out, state->typemap,
-					    &cur_rule->stypes, &stypes, 1)) {
-			ERR(state->handle, "Out of memory!");
-			return -1;
-		}
-
-		if (expand_convert_type_set(state->out, state->typemap,
-					    &cur_rule->ttypes, &ttypes, 1)) {
-			ERR(state->handle, "Out of memory!");
-			return -1;
-		}
-
-
-		ebitmap_for_each_positive_bit(&stypes, snode, i) {
-			ebitmap_for_each_positive_bit(&ttypes, tnode, j) {
-				rc = expand_filename_trans_helper(
-					state, cur_rule, i, j
-				);
-				if (rc)
-					return rc;
-			}
-			if (cur_rule->flags & RULE_SELF) {
-				rc = expand_filename_trans_helper(
-					state, cur_rule, i, i
-				);
-				if (rc)
-					return rc;
-			}
-		}
-
-		ebitmap_destroy(&stypes);
-		ebitmap_destroy(&ttypes);
-
-		cur_rule = cur_rule->next;
-	}
-	return 0;
-}
-
 static int exp_rangetr_helper(uint32_t stype, uint32_t ttype, uint32_t tclass,
 			      mls_semantic_range_t * trange,
 			      expand_state_t * state)
@@ -1705,6 +1620,7 @@ static int expand_terule_helper(sepol_handle_t * handle,
 				uint32_t specified, cond_av_list_t ** cond,
 				cond_av_list_t ** other, uint32_t stype,
 				uint32_t ttype, class_perm_node_t * perms,
+				char *object_name, uint8_t name_match,
 				avtab_t * avtab, int enabled)
 {
 	avtab_key_t avkey;
@@ -1729,11 +1645,46 @@ static int expand_terule_helper(sepol_handle_t * handle,
 		    typemap ? typemap[cur->data - 1] : cur->data;
 		avkey.target_class = cur->tclass;
 
+		/*
+		 * if expanded node is a filename transition, insert it, insert
+		 * function checks for duplicates
+		 */
+		if (specified & AVRULE_TRANSITION && object_name) {
+			int rc = avtab_insert_filename_trans(avtab, &avkey,
+							     remapped_data,
+							     object_name,
+							     name_match,
+							     &oldtype);
+			if (rc == SEPOL_EEXIST) {
+				ERR(handle, "conflicting filename transition %s %s:%s \"%s\": %s vs %s",
+				    p->p_type_val_to_name[avkey.source_type - 1],
+				    p->p_type_val_to_name[avkey.target_type - 1],
+				    p->p_class_val_to_name[avkey.target_class - 1],
+				    object_name,
+				    p->p_type_val_to_name[oldtype - 1],
+				    p->p_type_val_to_name[remapped_data - 1]);
+				return EXPAND_RULE_CONFLICT;
+			}
+			if (rc < 0)
+				return EXPAND_RULE_ERROR;
+			return EXPAND_RULE_SUCCESS;
+		}
+
 		conflict = 0;
 		/* check to see if the expanded TE already exists --
 		 * either in the global scope or in another
 		 * conditional AV tab */
 		node = avtab_search_node(&p->te_avtab, &avkey);
+
+		/*
+		 * if node does not already contain transition, it is not a
+		 * conflict and transition otype will be set to node found by
+		 * find_avtab_node()
+		 */
+		if (specified & AVRULE_TRANSITION && node &&
+		    !node->datum.trans->otype)
+			node = NULL;
+
 		if (node) {
 			conflict = 1;
 		} else {
@@ -1741,12 +1692,16 @@ static int expand_terule_helper(sepol_handle_t * handle,
 			if (node && node->parse_context != other) {
 				conflict = 2;
 			}
+			/*
+			 * conditional avtab does not contain filename
+			 * transitions, no need to check for otype == 0
+			 */
 		}
 
 		if (conflict) {
 			avdatump = &node->datum;
 			if (specified & AVRULE_TRANSITION) {
-				oldtype = avdatump->data;
+				oldtype = avdatump->trans->otype;
 			} else if (specified & AVRULE_MEMBER) {
 				oldtype = avdatump->data;
 			} else if (specified & AVRULE_CHANGE) {
@@ -1760,12 +1715,9 @@ static int expand_terule_helper(sepol_handle_t * handle,
 				    || node->parse_context == cond)
 					return EXPAND_RULE_SUCCESS;
 				ERR(handle, "duplicate TE rule for %s %s:%s %s",
-				    p->p_type_val_to_name[avkey.source_type -
-							  1],
-				    p->p_type_val_to_name[avkey.target_type -
-							  1],
-				    p->p_class_val_to_name[avkey.target_class -
-							   1],
+				    p->p_type_val_to_name[avkey.source_type - 1],
+				    p->p_type_val_to_name[avkey.target_type - 1],
+				    p->p_class_val_to_name[avkey.target_class - 1],
 				    p->p_type_val_to_name[oldtype - 1]);
 				return EXPAND_RULE_CONFLICT;
 			}
@@ -1789,7 +1741,11 @@ static int expand_terule_helper(sepol_handle_t * handle,
 		}
 
 		avdatump = &node->datum;
-		avdatump->data = remapped_data;
+		if (specified & AVRULE_TRANSITION) {
+			avdatump->trans->otype = remapped_data;
+		} else {
+			avdatump->data = remapped_data;
+		}
 
 		cur = cur->next;
 	}
@@ -1926,6 +1882,8 @@ static int expand_rule_helper(sepol_handle_t * handle,
 				retval = expand_terule_helper(handle, p, typemap,
 							      source_rule->specified, cond,
 							      other, i, i, source_rule->perms,
+							      source_rule->object_name,
+							      source_rule->name_match,
 							      dest_avtab, enabled);
 				if (retval != EXPAND_RULE_SUCCESS)
 					return retval;
@@ -1942,6 +1900,8 @@ static int expand_rule_helper(sepol_handle_t * handle,
 				retval = expand_terule_helper(handle, p, typemap,
 							      source_rule->specified, cond,
 							      other, i, j, source_rule->perms,
+							      source_rule->object_name,
+							      source_rule->name_match,
 							      dest_avtab, enabled);
 				if (retval != EXPAND_RULE_SUCCESS)
 					return retval;
@@ -2769,9 +2729,6 @@ static int copy_and_expand_avrule_block(expand_state_t * state)
 		    copy_role_trans(state, decl->role_tr_rules) != 0) {
 			goto cleanup;
 		}
-
-		if (expand_filename_trans(state, decl->filename_trans_rules))
-			goto cleanup;
 
 		/* expand the range transition rules */
 		if (expand_range_trans(state, decl->range_tr_rules))

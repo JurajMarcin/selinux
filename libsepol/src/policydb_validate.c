@@ -825,6 +825,18 @@ static int validate_xperms(const avtab_extended_perms_t *xperms)
 bad:
 	return -1;
 }
+
+static int validate_name_trans_helper(hashtab_key_t k __attribute__ ((unused)),
+				      hashtab_datum_t d, void *a)
+{
+	uint32_t *otype = d;
+	map_arg_t *margs = a;
+
+	if (validate_simpletype(*otype, margs->policy, margs->flavors))
+		return -1;
+	return 0;
+}
+
 static int validate_avtab_key_and_datum(avtab_key_t *k, avtab_datum_t *d, void *args)
 {
 	map_arg_t *margs = args;
@@ -832,8 +844,29 @@ static int validate_avtab_key_and_datum(avtab_key_t *k, avtab_datum_t *d, void *
 	if (validate_avtab_key(k, 0, margs->policy, margs->flavors))
 		return -1;
 
-	if ((k->specified & AVTAB_TYPE) && validate_simpletype(d->data, margs->policy, margs->flavors))
+	if (k->specified & AVTAB_TRANSITION) {
+		/* if otype is set (non-zero), it must by a valid simple type */
+		if (d->trans->otype && validate_simpletype(d->trans->otype, margs->policy, margs->flavors))
+			return -1;
+
+		/* also each transition must be non empty */
+		if (!d->trans->otype &&
+		    hashtab_is_empty(d->trans->name_trans.table) &&
+		    hashtab_is_empty(d->trans->prefix_trans.table) &&
+		    hashtab_is_empty(d->trans->suffix_trans.table))
+			return -1;
+
+		/* and each name transition must be also valid */
+		if (hashtab_map(d->trans->name_trans.table,
+				validate_name_trans_helper, margs) ||
+		    hashtab_map(d->trans->prefix_trans.table,
+				validate_name_trans_helper, margs) ||
+		    hashtab_map(d->trans->suffix_trans.table,
+				validate_name_trans_helper, margs))
+			return -1;
+	} else if ((k->specified & AVTAB_TYPE) && validate_simpletype(d->data, margs->policy, margs->flavors)) {
 		return -1;
+	}
 
 	if ((k->specified & AVTAB_XPERMS) && validate_xperms(d->xperms))
 		return -1;
@@ -1084,41 +1117,6 @@ bad:
 	return -1;
 }
 
-static int validate_filename_trans(hashtab_key_t k, hashtab_datum_t d, void *args)
-{
-	const filename_trans_key_t *ftk = (filename_trans_key_t *)k;
-	const filename_trans_datum_t *ftd = d;
-	validate_t *flavors = (validate_t *)args;
-
-	if (validate_value(ftk->ttype, &flavors[SYM_TYPES]))
-		goto bad;
-	if (validate_value(ftk->tclass, &flavors[SYM_CLASSES]))
-		goto bad;
-	if (!ftd)
-		goto bad;
-	for (; ftd; ftd = ftd->next) {
-		if (validate_ebitmap(&ftd->stypes, &flavors[SYM_TYPES]))
-			goto bad;
-		if (validate_value(ftd->otype, &flavors[SYM_TYPES]))
-			goto bad;
-	}
-
-	return 0;
-
-bad:
-	return -1;
-}
-
-static int validate_filename_trans_hashtab(sepol_handle_t *handle, hashtab_t filename_trans, validate_t flavors[])
-{
-	if (hashtab_map(filename_trans, validate_filename_trans, flavors)) {
-		ERR(handle, "Invalid filename trans");
-		return -1;
-	}
-
-	return 0;
-}
-
 static int validate_context(const context_struct_t *con, validate_t flavors[], int mls)
 {
 	if (validate_value(con->user, &flavors[SYM_USERS]))
@@ -1285,31 +1283,6 @@ bad:
 	return -1;
 }
 
-
-static int validate_filename_trans_rules(sepol_handle_t *handle, const filename_trans_rule_t *filename_trans, const policydb_t *p, validate_t flavors[])
-{
-	for (; filename_trans; filename_trans = filename_trans->next) {
-		if (validate_type_set(&filename_trans->stypes, &flavors[SYM_TYPES]))
-			goto bad;
-		if (validate_type_set(&filename_trans->ttypes, &flavors[SYM_TYPES]))
-			goto bad;
-		if (validate_value(filename_trans->tclass,&flavors[SYM_CLASSES] ))
-			goto bad;
-		if (validate_simpletype(filename_trans->otype, p, flavors))
-			goto bad;
-
-		/* currently only the RULE_SELF flag can be set */
-		if ((filename_trans->flags & ~RULE_SELF) != 0)
-			goto bad;
-	}
-
-	return 0;
-
-bad:
-	ERR(handle, "Invalid filename trans rule list");
-	return -1;
-}
-
 static int validate_symtabs(sepol_handle_t *handle, const symtab_t symtabs[], validate_t flavors[])
 {
 	unsigned int i;
@@ -1343,8 +1316,6 @@ static int validate_avrule_blocks(sepol_handle_t *handle, const avrule_block_t *
 			if (validate_scope_index(handle, &decl->required, flavors))
 				goto bad;
 			if (validate_scope_index(handle, &decl->declared, flavors))
-				goto bad;
-			if (validate_filename_trans_rules(handle, decl->filename_trans_rules, p, flavors))
 				goto bad;
 			if (validate_symtabs(handle, decl->symtab, flavors))
 				goto bad;
@@ -1518,9 +1489,6 @@ int policydb_validate(sepol_handle_t *handle, const policydb_t *p)
 			goto bad;
 		if (validate_role_allows(handle, p->role_allow, flavors))
 			goto bad;
-		if (p->policyvers >= POLICYDB_VERSION_FILENAME_TRANS)
-			if (validate_filename_trans_hashtab(handle, p->filename_trans, flavors))
-				goto bad;
 	} else {
 		if (validate_avrule_blocks(handle, p->global, p, flavors))
 			goto bad;

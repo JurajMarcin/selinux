@@ -161,19 +161,6 @@ typedef struct role_allow {
 	struct role_allow *next;
 } role_allow_t;
 
-/* filename_trans rules */
-typedef struct filename_trans_key {
-	uint32_t ttype;
-	uint32_t tclass;
-	char *name;
-} filename_trans_key_t;
-
-typedef struct filename_trans_datum {
-	ebitmap_t stypes;
-	uint32_t otype;
-	struct filename_trans_datum *next;
-} filename_trans_datum_t;
-
 /* Type attributes */
 typedef struct type_datum {
 	symtab_datum_t s;
@@ -291,6 +278,11 @@ typedef struct avrule {
 	type_set_t stypes;
 	type_set_t ttypes;
 	class_perm_node_t *perms;
+	char *object_name;	/* optional object name */
+#define NAME_TRANS_MATCH_EXACT 0
+#define NAME_TRANS_MATCH_PREFIX 1
+#define NAME_TRANS_MATCH_SUFFIX 2
+	uint8_t name_match;
 	av_extended_perms_t *xperms;
 	unsigned long line;	/* line number from policy.conf where
 				 * this rule originated  */
@@ -313,16 +305,6 @@ typedef struct role_allow_rule {
 	role_set_t new_roles;	/* new roles */
 	struct role_allow_rule *next;
 } role_allow_rule_t;
-
-typedef struct filename_trans_rule {
-	uint32_t flags; /* may have RULE_SELF set */
-	type_set_t stypes;
-	type_set_t ttypes;
-	uint32_t tclass;
-	char *name;
-	uint32_t otype;	/* new type */
-	struct filename_trans_rule *next;
-} filename_trans_rule_t;
 
 typedef struct range_trans_rule {
 	type_set_t stypes;
@@ -464,9 +446,6 @@ typedef struct avrule_decl {
 	scope_index_t required;	/* symbols needed to activate this block */
 	scope_index_t declared;	/* symbols declared within this block */
 
-	/* type transition rules with a 'name' component */
-	filename_trans_rule_t *filename_trans_rules;
-
 	/* for additive statements (type attribute, roles, and users) */
 	symtab_t symtab[SYM_NUM];
 
@@ -592,10 +571,6 @@ typedef struct policydb {
 	/* range transitions table (range_trans_key -> mls_range) */
 	hashtab_t range_tr;
 
-	/* file transitions with the last path component */
-	hashtab_t filename_trans;
-	uint32_t filename_trans_count;
-
 	ebitmap_t *type_attr_map;
 
 	ebitmap_t *attr_type_map;	/* not saved in the binary policy */
@@ -654,11 +629,6 @@ extern int policydb_load_isids(policydb_t * p, sidtab_t * s);
 
 extern int policydb_sort_ocontexts(policydb_t *p);
 
-extern int policydb_filetrans_insert(policydb_t *p, uint32_t stype,
-				     uint32_t ttype, uint32_t tclass,
-				     const char *name, char **name_alloc,
-				     uint32_t otype, uint32_t *present_otype);
-
 /* Deprecated */
 extern int policydb_context_isvalid(const policydb_t * p,
 				    const context_struct_t * c);
@@ -678,8 +648,6 @@ extern void avrule_destroy(avrule_t * x);
 extern void avrule_list_destroy(avrule_t * x);
 extern void role_trans_rule_init(role_trans_rule_t * x);
 extern void role_trans_rule_list_destroy(role_trans_rule_t * x);
-extern void filename_trans_rule_init(filename_trans_rule_t * x);
-extern void filename_trans_rule_list_destroy(filename_trans_rule_t * x);
 
 extern void role_datum_init(role_datum_t * x);
 extern void role_datum_destroy(role_datum_t * x);
@@ -758,10 +726,12 @@ extern int policydb_set_target_platform(policydb_t *p, int platform);
 #define POLICYDB_VERSION_INFINIBAND		31 /* Linux-specific */
 #define POLICYDB_VERSION_GLBLUB		32
 #define POLICYDB_VERSION_COMP_FTRANS	33 /* compressed filename transitions */
+#define POLICYDB_VERSION_AVTAB_FTRANS	34 /* filename transitions moved to avtab */
+#define POLICYDB_VERSION_PREFIX_SUFFIX	35 /* prefix/suffix support for filename transitions */
 
 /* Range of policy versions we understand*/
 #define POLICYDB_VERSION_MIN	POLICYDB_VERSION_BASE
-#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_COMP_FTRANS
+#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_PREFIX_SUFFIX
 
 /* Module versions and specific changes*/
 #define MOD_POLICYDB_VERSION_BASE		4
@@ -784,9 +754,11 @@ extern int policydb_set_target_platform(policydb_t *p, int platform);
 #define MOD_POLICYDB_VERSION_INFINIBAND		19
 #define MOD_POLICYDB_VERSION_GLBLUB		20
 #define MOD_POLICYDB_VERSION_SELF_TYPETRANS	21
+#define MOD_POLICYDB_VERSION_AVRULE_FTRANS	22
+#define MOD_POLICYDB_VERSION_PREFIX_SUFFIX	23 /* preffix/suffix support for filename transitions */
 
 #define MOD_POLICYDB_VERSION_MIN MOD_POLICYDB_VERSION_BASE
-#define MOD_POLICYDB_VERSION_MAX MOD_POLICYDB_VERSION_SELF_TYPETRANS
+#define MOD_POLICYDB_VERSION_MAX MOD_POLICYDB_VERSION_PREFIX_SUFFIX
 
 #define POLICYDB_CONFIG_MLS    1
 
