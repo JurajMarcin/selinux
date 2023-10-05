@@ -1241,9 +1241,11 @@ static int validate_filename_trans_hashtab(sepol_handle_t *handle, const policyd
 {
 	map_arg_t margs = { flavors, handle, p };
 
-	if (hashtab_map(p->filename_trans, validate_filename_trans, &margs)) {
-		ERR(handle, "Invalid filename trans");
-		return -1;
+	for (uint32_t i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+		if (hashtab_map(p->filename_trans[i], validate_filename_trans, &margs)) {
+			ERR(handle, "Invalid filename trans");
+			return -1;
+		}
 	}
 
 	return 0;

@@ -1419,7 +1419,7 @@ static int expand_filename_trans_helper(expand_state_t *state,
 	rc = policydb_filetrans_insert(
 		state->out, s + 1, t + 1,
 		rule->tclass, rule->name,
-		NULL, mapped_otype, &present_otype
+		NULL, mapped_otype, FILENAME_TRANS_MATCH_EXACT, &present_otype
 	);
 	if (rc == SEPOL_EEXIST) {
 		/* duplicate rule, ignore */

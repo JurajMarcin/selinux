@@ -314,6 +314,9 @@ typedef struct role_allow_rule {
 	struct role_allow_rule *next;
 } role_allow_rule_t;
 
+#define FILENAME_TRANS_MATCH_EXACT 0
+#define FILENAME_TRANS_MATCH_PREFIX 1
+#define FILENAME_TRANS_MATCH_SUFFIX 2
 typedef struct filename_trans_rule {
 	uint32_t flags; /* may have RULE_SELF set */
 	type_set_t stypes;
@@ -321,6 +324,7 @@ typedef struct filename_trans_rule {
 	uint32_t tclass;
 	char *name;
 	uint32_t otype;	/* new type */
+	uint32_t match_type;
 	struct filename_trans_rule *next;
 } filename_trans_rule_t;
 
@@ -593,7 +597,7 @@ typedef struct policydb {
 	hashtab_t range_tr;
 
 	/* file transitions with the last path component */
-	hashtab_t filename_trans;
+	hashtab_t filename_trans[FILENAME_TRANS_MATCH_SUFFIX + 1];
 	uint32_t filename_trans_count;
 
 	ebitmap_t *type_attr_map;
@@ -657,7 +661,8 @@ extern int policydb_sort_ocontexts(policydb_t *p);
 extern int policydb_filetrans_insert(policydb_t *p, uint32_t stype,
 				     uint32_t ttype, uint32_t tclass,
 				     const char *name, char **name_alloc,
-				     uint32_t otype, uint32_t *present_otype);
+				     uint32_t otype, uint32_t match_type,
+				     uint32_t *present_otype);
 
 /* Deprecated */
 extern int policydb_context_isvalid(const policydb_t * p,

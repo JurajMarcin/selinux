@@ -3313,7 +3313,8 @@ int define_filename_trans(void)
 			ebitmap_for_each_positive_bit(&e_ttypes, tnode, t) {
 				rc = policydb_filetrans_insert(
 					policydbp, s+1, t+1, c+1, name,
-					NULL, otype, NULL
+					NULL, otype, FILENAME_TRANS_MATCH_EXACT,
+					NULL
 				);
 				if (rc != SEPOL_OK) {
 					if (rc == SEPOL_EEXIST) {
@@ -3331,7 +3332,8 @@ int define_filename_trans(void)
 			if (self) {
 				rc = policydb_filetrans_insert(
 					policydbp, s+1, s+1, c+1, name,
-					NULL, otype, NULL
+					NULL, otype, FILENAME_TRANS_MATCH_EXACT,
+					NULL
 				);
 				if (rc != SEPOL_OK) {
 					if (rc == SEPOL_EEXIST) {

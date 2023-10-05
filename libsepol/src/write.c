@@ -653,7 +653,8 @@ static int filename_write_one(hashtab_key_t key, void *data, void *ptr)
 	return 0;
 }
 
-static int filename_trans_write(struct policydb *p, void *fp)
+static int filename_trans_write(struct policydb *p, uint32_t match_type,
+				void *fp)
 {
 	size_t items;
 	uint32_t buf[1];
@@ -663,20 +664,25 @@ static int filename_trans_write(struct policydb *p, void *fp)
 		return 0;
 
 	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
+		/*
+		 * This version does not have other than exact match
+		 * transitions, there is no need to count other
+		 */
 		buf[0] = cpu_to_le32(p->filename_trans_count);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
 		if (items != 1)
 			return POLICYDB_ERROR;
 
-		rc = hashtab_map(p->filename_trans, filename_write_one_compat,
-				 fp);
+		rc = hashtab_map(p->filename_trans[match_type],
+				 filename_write_one_compat, fp);
 	} else {
-		buf[0] = cpu_to_le32(p->filename_trans->nel);
+		buf[0] = cpu_to_le32(p->filename_trans[match_type]->nel);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
 		if (items != 1)
 			return POLICYDB_ERROR;
 
-		rc = hashtab_map(p->filename_trans, filename_write_one, fp);
+		rc = hashtab_map(p->filename_trans[match_type],
+				 filename_write_one, fp);
 	}
 	return rc;
 }
@@ -2370,10 +2376,11 @@ int policydb_write(policydb_t * p, struct policy_file *fp)
 		if (role_allow_write(p->role_allow, fp))
 			return POLICYDB_ERROR;
 		if (p->policyvers >= POLICYDB_VERSION_FILENAME_TRANS) {
-			if (filename_trans_write(p, fp))
+			if (filename_trans_write(p, FILENAME_TRANS_MATCH_EXACT,
+						 fp))
 				return POLICYDB_ERROR;
 		} else {
-			if (p->filename_trans)
+			if (p->filename_trans[FILENAME_TRANS_MATCH_EXACT])
 				WARN(fp->handle, "Discarding filename type transition rules");
 		}
 	} else {

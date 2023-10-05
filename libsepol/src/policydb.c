@@ -909,10 +909,14 @@ int policydb_init(policydb_t * p)
 	if (rc)
 		goto err;
 
-	p->filename_trans = hashtab_create(filenametr_hash, filenametr_cmp, (1 << 10));
-	if (!p->filename_trans) {
-		rc = -ENOMEM;
-		goto err;
+	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+		p->filename_trans[i] = hashtab_create(filenametr_hash,
+						      filenametr_cmp,
+						      (1 << 10));
+		if (!p->filename_trans[i]) {
+			rc = -ENOMEM;
+			goto err;
+		}
 	}
 
 	p->range_tr = hashtab_create(rangetr_hash, rangetr_cmp, 256);
@@ -926,7 +930,9 @@ int policydb_init(policydb_t * p)
 
 	return 0;
 err:
-	hashtab_destroy(p->filename_trans);
+	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+		hashtab_destroy(p->filename_trans[i]);
+	}
 	hashtab_destroy(p->range_tr);
 	for (i = 0; i < SYM_NUM; i++) {
 		hashtab_destroy(p->symtab[i].table);
@@ -1566,8 +1572,10 @@ void policydb_destroy(policydb_t * p)
 	if (lra)
 		free(lra);
 
-	hashtab_map(p->filename_trans, filenametr_destroy, NULL);
-	hashtab_destroy(p->filename_trans);
+	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+		hashtab_map(p->filename_trans[i], filenametr_destroy, NULL);
+		hashtab_destroy(p->filename_trans[i]);
+	}
 
 	hashtab_map(p->range_tr, range_tr_destroy, NULL);
 	hashtab_destroy(p->range_tr);
@@ -2570,7 +2578,7 @@ static int role_allow_read(role_allow_t ** r, struct policy_file *fp)
 int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 			      uint32_t tclass, const char *name,
 			      char **name_alloc, uint32_t otype,
-			      uint32_t *present_otype)
+			      uint32_t match_type, uint32_t *present_otype)
 {
 	filename_trans_key_t *ft, key;
 	filename_trans_datum_t *datum, *last;
@@ -2580,7 +2588,8 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 	key.name = (char *)name;
 
 	last = NULL;
-	datum = hashtab_search(p->filename_trans, (hashtab_key_t)&key);
+	datum = hashtab_search(p->filename_trans[match_type],
+			       (hashtab_key_t)&key);
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
 			if (present_otype)
@@ -2628,7 +2637,8 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 			ft->tclass = tclass;
 			ft->name = name_dup;
 
-			if (hashtab_insert(p->filename_trans, (hashtab_key_t)ft,
+			if (hashtab_insert(p->filename_trans[match_type],
+					   (hashtab_key_t)ft,
 					   (hashtab_datum_t)datum)) {
 				free(name_dup);
 				free(datum);
@@ -2669,8 +2679,9 @@ static int filename_trans_read_one_compat(policydb_t *p, struct policy_file *fp)
 	tclass = le32_to_cpu(buf[2]);
 	otype  = le32_to_cpu(buf[3]);
 
+	// This version does not contain other than exact filename transitions
 	rc = policydb_filetrans_insert(p, stype, ttype, tclass, name, &name,
-				       otype, NULL);
+				       otype, FILENAME_TRANS_MATCH_EXACT, NULL);
 	if (rc) {
 		if (rc != SEPOL_EEXIST)
 			goto err;
@@ -2718,7 +2729,8 @@ out:
 	return rc;
 }
 
-static int filename_trans_read_one(policydb_t *p, struct policy_file *fp)
+static int filename_trans_read_one(policydb_t *p, uint32_t match_type,
+				   struct policy_file *fp)
 {
 	filename_trans_key_t *ft = NULL;
 	filename_trans_datum_t **dst, *datum, *first = NULL;
@@ -2782,7 +2794,7 @@ static int filename_trans_read_one(policydb_t *p, struct policy_file *fp)
 	ft->tclass = tclass;
 	ft->name = name;
 
-	rc = hashtab_insert(p->filename_trans, (hashtab_key_t)ft,
+	rc = hashtab_insert(p->filename_trans[match_type], (hashtab_key_t)ft,
 			    (hashtab_datum_t)first);
 	if (rc)
 		goto err;
@@ -2820,7 +2832,9 @@ static int filename_trans_read(policydb_t *p, struct policy_file *fp)
 		}
 	} else {
 		for (i = 0; i < nel; i++) {
-			rc = filename_trans_read_one(p, fp);
+			rc = filename_trans_read_one(p,
+						     FILENAME_TRANS_MATCH_EXACT,
+						     fp);
 			if (rc < 0)
 				return -1;
 		}
