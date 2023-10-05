@@ -154,6 +154,7 @@ typedef int (* require_func_t)(int pass);
 %token DEFAULT_USER DEFAULT_ROLE DEFAULT_TYPE DEFAULT_RANGE
 %token LOW_HIGH LOW HIGH GLBLUB
 %token INVALID_CHAR
+%token PREFIX SUFFIX
 
 %left OR
 %left XOR
@@ -413,6 +414,12 @@ cond_rule_def           : cond_transition_def
 cond_transition_def	: TYPE_TRANSITION names names ':' names identifier filename ';'
                         { $$ = define_cond_filename_trans() ;
                           if ($$ == COND_ERR) YYABORT;}
+			| TYPE_TRANSITION names names ':' names identifier filename PREFIX ';'
+                        { $$ = define_cond_filename_trans() ;
+                          if ($$ == COND_ERR) YYABORT;}
+			| TYPE_TRANSITION names names ':' names identifier filename SUFFIX ';'
+                        { $$ = define_cond_filename_trans() ;
+                          if ($$ == COND_ERR) YYABORT;}
 			| TYPE_TRANSITION names names ':' names identifier ';'
                         { $$ = define_cond_compute_type(AVRULE_TRANSITION) ;
                           if ($$ == COND_ERR) YYABORT;}
@@ -450,7 +457,11 @@ cond_dontaudit_def	: DONTAUDIT names names ':' names names ';'
 		        ;
 			;
 transition_def		: TYPE_TRANSITION  names names ':' names identifier filename ';'
-			{if (define_filename_trans()) YYABORT; }
+			{if (define_filename_trans(FILENAME_TRANS_MATCH_EXACT)) YYABORT; }
+			| TYPE_TRANSITION  names names ':' names identifier filename PREFIX ';'
+			{if (define_filename_trans(FILENAME_TRANS_MATCH_PREFIX)) YYABORT; }
+			| TYPE_TRANSITION  names names ':' names identifier filename SUFFIX ';'
+			{if (define_filename_trans(FILENAME_TRANS_MATCH_SUFFIX)) YYABORT; }
 			| TYPE_TRANSITION names names ':' names identifier ';'
                         {if (define_compute_type(AVRULE_TRANSITION)) YYABORT;}
                         | TYPE_MEMBER names names ':' names identifier ';'

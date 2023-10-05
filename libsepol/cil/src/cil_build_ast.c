@@ -3386,10 +3386,11 @@ int cil_gen_typetransition(struct cil_db *db, struct cil_tree_node *parse_curren
 		CIL_SYN_STRING,
 		CIL_SYN_STRING,
 		CIL_SYN_STRING | CIL_SYN_END,
-		CIL_SYN_END
+		CIL_SYN_STRING | CIL_SYN_END,
+		CIL_SYN_END,
 	};
 	size_t syntax_len = sizeof(syntax)/sizeof(*syntax);
-	char *s1, *s2, *s3, *s4, *s5;
+	char *s1, *s2, *s3, *s4, *s5, *s6;
 
 	if (db == NULL || parse_current == NULL || ast_node == NULL ) {
 		goto exit;
@@ -3405,12 +3406,22 @@ int cil_gen_typetransition(struct cil_db *db, struct cil_tree_node *parse_curren
 	s3 = parse_current->next->next->next->data;
 	s4 = parse_current->next->next->next->next->data;
 	s5 = NULL;
+	s6 = NULL;
 
 	if (parse_current->next->next->next->next->next) {
 		if (s4 == CIL_KEY_STAR) {
-			s4 = parse_current->next->next->next->next->next->data;
+			if (parse_current->next->next->next->next->next->next) {
+				s4 = parse_current->next->next->next->next->next->next->data;
+			} else {
+				s4 = parse_current->next->next->next->next->next->data;
+			}
 		} else {
-			s5 = parse_current->next->next->next->next->next->data;
+			if (parse_current->next->next->next->next->next->next) {
+				s5 = parse_current->next->next->next->next->next->data;
+				s6 = parse_current->next->next->next->next->next->next->data;
+			} else {
+				s5 = parse_current->next->next->next->next->next->data;
+			}
 		}
 	}
 
@@ -3426,7 +3437,22 @@ int cil_gen_typetransition(struct cil_db *db, struct cil_tree_node *parse_curren
 		nametypetrans->obj_str = s3;
 		nametypetrans->name_str = s4;
 		nametypetrans->name = cil_gen_declared_string(db, s4, ast_node);
-		nametypetrans->result_str = s5;
+		if (s6) {
+			if (s5 == CIL_KEY_PREFIX) {
+				nametypetrans->match_type = FILENAME_TRANS_MATCH_PREFIX;
+			} else if (s5 == CIL_KEY_SUFFIX) {
+				nametypetrans->match_type = FILENAME_TRANS_MATCH_SUFFIX;
+			} else {
+				rc = SEPOL_ERR;
+				goto exit;
+			}
+			nametypetrans->result_str = s6;
+		} else {
+			nametypetrans->result_str = s5;
+		}
+
+		ast_node->data = nametypetrans;
+		ast_node->flavor = CIL_NAMETYPETRANSITION;
 	} else {
 		struct cil_type_rule *rule = NULL;
 		cil_type_rule_init(&rule);

@@ -209,6 +209,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	 .target_platform = SEPOL_TARGET_SELINUX,
 	},
 	{
+	 .type = POLICY_KERN,
+	 .version = POLICYDB_VERSION_PREFIX_SUFFIX,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = OCON_IBENDPORT + 1,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
 	 .type = POLICY_BASE,
 	 .version = MOD_POLICYDB_VERSION_BASE,
 	 .sym_num = SYM_NUM,
@@ -335,6 +342,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	 .target_platform = SEPOL_TARGET_SELINUX,
 	},
 	{
+	 .type = POLICY_BASE,
+	 .version = MOD_POLICYDB_VERSION_PREFIX_SUFFIX,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = OCON_IBENDPORT + 1,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
 	 .type = POLICY_MOD,
 	 .version = MOD_POLICYDB_VERSION_BASE,
 	 .sym_num = SYM_NUM,
@@ -456,6 +470,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	{
 	 .type = POLICY_MOD,
 	 .version = MOD_POLICYDB_VERSION_SELF_TYPETRANS,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = 0,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
+	 .type = POLICY_MOD,
+	 .version = MOD_POLICYDB_VERSION_PREFIX_SUFFIX,
 	 .sym_num = SYM_NUM,
 	 .ocon_num = 0,
 	 .target_platform = SEPOL_TARGET_SELINUX,
@@ -909,10 +930,14 @@ int policydb_init(policydb_t * p)
 	if (rc)
 		goto err;
 
-	p->filename_trans = hashtab_create(filenametr_hash, filenametr_cmp, (1 << 10));
-	if (!p->filename_trans) {
-		rc = -ENOMEM;
-		goto err;
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
+		p->filename_trans[i] = hashtab_create(filenametr_hash,
+						      filenametr_cmp,
+						      (1 << 10));
+		if (!p->filename_trans[i]) {
+			rc = -ENOMEM;
+			goto err;
+		}
 	}
 
 	p->range_tr = hashtab_create(rangetr_hash, rangetr_cmp, 256);
@@ -926,7 +951,9 @@ int policydb_init(policydb_t * p)
 
 	return 0;
 err:
-	hashtab_destroy(p->filename_trans);
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
+		hashtab_destroy(p->filename_trans[i]);
+	}
 	hashtab_destroy(p->range_tr);
 	for (i = 0; i < SYM_NUM; i++) {
 		hashtab_destroy(p->symtab[i].table);
@@ -1566,8 +1593,10 @@ void policydb_destroy(policydb_t * p)
 	if (lra)
 		free(lra);
 
-	hashtab_map(p->filename_trans, filenametr_destroy, NULL);
-	hashtab_destroy(p->filename_trans);
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
+		hashtab_map(p->filename_trans[i], filenametr_destroy, NULL);
+		hashtab_destroy(p->filename_trans[i]);
+	}
 
 	hashtab_map(p->range_tr, range_tr_destroy, NULL);
 	hashtab_destroy(p->range_tr);
@@ -2570,7 +2599,7 @@ static int role_allow_read(role_allow_t ** r, struct policy_file *fp)
 int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 			      uint32_t tclass, const char *name,
 			      char **name_alloc, uint32_t otype,
-			      uint32_t *present_otype)
+			      uint32_t match_type, uint32_t *present_otype)
 {
 	filename_trans_key_t *ft, key;
 	filename_trans_datum_t *datum, *last;
@@ -2580,7 +2609,8 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 	key.name = (char *)name;
 
 	last = NULL;
-	datum = hashtab_search(p->filename_trans, (hashtab_key_t)&key);
+	datum = hashtab_search(p->filename_trans[match_type],
+			       (hashtab_key_t)&key);
 	while (datum) {
 		if (ebitmap_get_bit(&datum->stypes, stype - 1)) {
 			if (present_otype)
@@ -2628,7 +2658,8 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 			ft->tclass = tclass;
 			ft->name = name_dup;
 
-			if (hashtab_insert(p->filename_trans, (hashtab_key_t)ft,
+			if (hashtab_insert(p->filename_trans[match_type],
+					   (hashtab_key_t)ft,
 					   (hashtab_datum_t)datum)) {
 				free(name_dup);
 				free(datum);
@@ -2638,7 +2669,14 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 		}
 	}
 
-	p->filename_trans_count++;
+        /*
+         * We need to keep track of the number of exact match filename
+	 * transitions for writing them in uncompressed format in older binary
+	 * policy versions. Other match types were not supported back then, so
+	 * it is not needed.
+         */
+        if (match_type == FILENAME_TRANS_MATCH_EXACT)
+		p->filename_trans_exact_count++;
 	return ebitmap_set_bit(&datum->stypes, stype - 1, 1);
 }
 
@@ -2669,8 +2707,9 @@ static int filename_trans_read_one_compat(policydb_t *p, struct policy_file *fp)
 	tclass = le32_to_cpu(buf[2]);
 	otype  = le32_to_cpu(buf[3]);
 
+	// This version does not contain other than exact filename transitions
 	rc = policydb_filetrans_insert(p, stype, ttype, tclass, name, &name,
-				       otype, NULL);
+				       otype, FILENAME_TRANS_MATCH_EXACT, NULL);
 	if (rc) {
 		if (rc != SEPOL_EEXIST)
 			goto err;
@@ -2718,7 +2757,8 @@ out:
 	return rc;
 }
 
-static int filename_trans_read_one(policydb_t *p, struct policy_file *fp)
+static int filename_trans_read_one(policydb_t *p, uint32_t match_type,
+				   struct policy_file *fp)
 {
 	filename_trans_key_t *ft = NULL;
 	filename_trans_datum_t **dst, *datum, *first = NULL;
@@ -2766,7 +2806,14 @@ static int filename_trans_read_one(policydb_t *p, struct policy_file *fp)
 
 		datum->otype = le32_to_cpu(buf[0]);
 
-		p->filename_trans_count += ebitmap_cardinality(&datum->stypes);
+		/*
+		 * We need to keep track of the number of exact match filename
+		 * transitions for writing them in uncompressed format in older
+		 * binary policy versions. Other match types were not supported
+		 * back then, so it is not needed
+		 */
+		if (match_type == FILENAME_TRANS_MATCH_EXACT)
+			p->filename_trans_exact_count += ebitmap_cardinality(&datum->stypes);
 
 		dst = &datum->next;
 	}
@@ -2782,7 +2829,7 @@ static int filename_trans_read_one(policydb_t *p, struct policy_file *fp)
 	ft->tclass = tclass;
 	ft->name = name;
 
-	rc = hashtab_insert(p->filename_trans, (hashtab_key_t)ft,
+	rc = hashtab_insert(p->filename_trans[match_type], (hashtab_key_t)ft,
 			    (hashtab_datum_t)first);
 	if (rc)
 		goto err;
@@ -2801,7 +2848,8 @@ err:
 	return -1;
 }
 
-static int filename_trans_read(policydb_t *p, struct policy_file *fp)
+static int filename_trans_read(policydb_t *p, struct policy_file *fp,
+			       uint32_t match_type)
 {
 	unsigned int i;
 	uint32_t buf[1], nel;
@@ -2814,13 +2862,17 @@ static int filename_trans_read(policydb_t *p, struct policy_file *fp)
 
 	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
 		for (i = 0; i < nel; i++) {
+			/*
+			 * this version does not have other than exact match
+			 * transitions
+			 */
 			rc = filename_trans_read_one_compat(p, fp);
 			if (rc < 0)
 				return -1;
 		}
 	} else {
 		for (i = 0; i < nel; i++) {
-			rc = filename_trans_read_one(p, fp);
+			rc = filename_trans_read_one(p, match_type, fp);
 			if (rc < 0)
 				return -1;
 		}
@@ -3747,7 +3799,7 @@ static int role_allow_rule_read(role_allow_rule_t ** r, struct policy_file *fp)
 static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 				    struct policy_file *fp)
 {
-	uint32_t buf[3], nel, i, len;
+	uint32_t buf[4], nel, i, len;
 	unsigned int entries;
 	filename_trans_rule_t *ftr, *lftr;
 	int rc;
@@ -3786,7 +3838,9 @@ static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 		if (type_set_read(&ftr->ttypes, fp))
 			return -1;
 
-		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
+		if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX)
+			entries = 4;
+		else if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
 			entries = 3;
 		else
 			entries = 2;
@@ -3798,6 +3852,8 @@ static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 		ftr->otype = le32_to_cpu(buf[1]);
 		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
 			ftr->flags = le32_to_cpu(buf[2]);
+		if (p->policyvers >=  MOD_POLICYDB_VERSION_PREFIX_SUFFIX)
+			ftr->match_type = le32_to_cpu(buf[3]);
 	}
 
 	return 0;
@@ -4360,7 +4416,11 @@ int policydb_read(policydb_t * p, struct policy_file *fp, unsigned verbose)
 		if (role_allow_read(&p->role_allow, fp))
 			goto bad;
 		if (r_policyvers >= POLICYDB_VERSION_FILENAME_TRANS &&
-		    filename_trans_read(p, fp))
+		    filename_trans_read(p, fp, FILENAME_TRANS_MATCH_EXACT))
+			goto bad;
+		if (r_policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX &&
+		    (filename_trans_read(p, fp, FILENAME_TRANS_MATCH_PREFIX) ||
+		     filename_trans_read(p, fp, FILENAME_TRANS_MATCH_SUFFIX)))
 			goto bad;
 	} else {
 		/* first read the AV rule blocks, then the scope tables */
