@@ -1869,6 +1869,7 @@ exit:
 
 struct map_filename_trans_args {
 	struct policydb *pdb;
+	uint32_t match_type;
 	struct strs *strs;
 };
 
@@ -1883,6 +1884,19 @@ static int map_filename_trans_to_str(hashtab_key_t key, void *data, void *arg)
 	struct ebitmap_node *node;
 	uint32_t bit;
 	int rc;
+	const char *match_str = "";
+
+	switch (map_args->match_type) {
+	case FILENAME_TRANS_MATCH_EXACT:
+		match_str = "";
+		break;
+	case FILENAME_TRANS_MATCH_PREFIX:
+		match_str = " prefix";
+		break;
+	case FILENAME_TRANS_MATCH_SUFFIX:
+		match_str = " suffix";
+		break;
+	}
 
 	tgt = pdb->p_type_val_to_name[ft->ttype - 1];
 	class = pdb->p_class_val_to_name[ft->tclass - 1];
@@ -1893,8 +1907,8 @@ static int map_filename_trans_to_str(hashtab_key_t key, void *data, void *arg)
 		ebitmap_for_each_positive_bit(&datum->stypes, node, bit) {
 			src = pdb->p_type_val_to_name[bit];
 			rc = strs_create_and_add(strs,
-						 "(typetransition %s %s %s \"%s\" %s)",
-						 5, src, tgt, class, filename, new);
+						 "(typetransition %s %s %s \"%s\"%s %s)",
+						 6, src, tgt, class, filename, match_str, new);
 			if (rc)
 				return rc;
 		}
@@ -1919,7 +1933,23 @@ static int write_filename_trans_rules_to_cil(FILE *out, struct policydb *pdb)
 	args.pdb = pdb;
 	args.strs = strs;
 
-	rc = hashtab_map(pdb->filename_trans, map_filename_trans_to_str, &args);
+	args.match_type = FILENAME_TRANS_MATCH_EXACT;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+
+	args.match_type = FILENAME_TRANS_MATCH_PREFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+
+	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+			 map_filename_trans_to_str, &args);
 	if (rc != 0) {
 		goto exit;
 	}

@@ -114,6 +114,8 @@ extern char *CIL_KEY_TUNABLEIF;
 extern char *CIL_KEY_ALLOW;
 extern char *CIL_KEY_DONTAUDIT;
 extern char *CIL_KEY_TYPETRANSITION;
+extern char *CIL_KEY_PREFIX;
+extern char *CIL_KEY_SUFFIX;
 extern char *CIL_KEY_TYPECHANGE;
 extern char *CIL_KEY_CALL;
 extern char *CIL_KEY_TUNABLE;
@@ -580,6 +582,8 @@ struct cil_nametypetransition {
 	struct cil_class *obj;
 	char *name_str;
 	struct cil_name *name;
+	char *match_type_str;
+	uint32_t match_type;
 	char *result_str;
 	void *result; /* type or alias */
 
