@@ -1,4 +1,3 @@
-
 #include <sepol/policydb/conditional.h>
 #include <sepol/policydb/ebitmap.h>
 #include <sepol/policydb/policydb.h>
@@ -1115,14 +1114,27 @@ bad:
 	return -1;
 }
 
-static int validate_filename_trans_hashtab(sepol_handle_t *handle, hashtab_t filename_trans, validate_t flavors[])
+static int validate_filename_trans_hashtabs(sepol_handle_t *handle,
+					    const policydb_t *p,
+					    validate_t flavors[])
 {
-	if (hashtab_map(filename_trans, validate_filename_trans, flavors)) {
-		ERR(handle, "Invalid filename trans");
-		return -1;
+	if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+			validate_filename_trans, flavors))
+		goto bad;
+
+	if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+				validate_filename_trans, flavors))
+			goto bad;
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+				validate_filename_trans, flavors))
+			goto bad;
 	}
 
 	return 0;
+bad:
+	ERR(handle, "Invalid filename trans");
+	return -1;
 }
 
 static int validate_context(const context_struct_t *con, validate_t flavors[], int mls)
@@ -1333,6 +1345,15 @@ static int validate_filename_trans_rules(sepol_handle_t *handle, const filename_
 			goto bad;
 		if (validate_simpletype(filename_trans->otype, p, flavors))
 			goto bad;
+
+		switch (filename_trans->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+		case FILENAME_TRANS_MATCH_PREFIX:
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			break;
+		default:
+			goto bad;
+		}
 
 		/* currently only the RULE_SELF flag can be set */
 		if ((filename_trans->flags & ~RULE_SELF) != 0)
@@ -1554,9 +1575,10 @@ int policydb_validate(sepol_handle_t *handle, const policydb_t *p)
 			goto bad;
 		if (validate_role_allows(handle, p->role_allow, flavors))
 			goto bad;
-		if (p->policyvers >= POLICYDB_VERSION_FILENAME_TRANS)
-			if (validate_filename_trans_hashtab(handle, p->filename_trans, flavors))
+		if (p->policyvers >= POLICYDB_VERSION_FILENAME_TRANS) {
+			if (validate_filename_trans_hashtabs(handle, p, flavors))
 				goto bad;
+		}
 	} else {
 		if (validate_avrule_blocks(handle, p->global, p, flavors))
 			goto bad;

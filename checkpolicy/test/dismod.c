@@ -564,13 +564,25 @@ static void display_role_allow(role_allow_rule_t * ra, policydb_t * p, FILE * fp
 
 static void display_filename_trans(filename_trans_rule_t * tr, policydb_t * p, FILE * fp)
 {
+	const char *match_str = "";
 	fprintf(fp, "filename transition");
 	for (; tr; tr = tr->next) {
 		display_type_set(&tr->stypes, 0, p, fp);
 		display_type_set(&tr->ttypes, 0, p, fp);
 		display_id(p, fp, SYM_CLASSES, tr->tclass - 1, ":");
 		display_id(p, fp, SYM_TYPES, tr->otype - 1, "");
-		fprintf(fp, " %s\n", tr->name);
+		switch (tr->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+			match_str = "";
+			break;
+		case FILENAME_TRANS_MATCH_PREFIX:
+			match_str = " prefix";
+			break;
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			match_str = " suffix";
+			break;
+		}
+		fprintf(fp, " %s%s\n", tr->name, match_str);
 	}
 }
 

@@ -321,6 +321,7 @@ typedef struct filename_trans_rule {
 	uint32_t tclass;
 	char *name;
 	uint32_t otype;	/* new type */
+	uint32_t match_type;
 	struct filename_trans_rule *next;
 } filename_trans_rule_t;
 
@@ -422,6 +423,14 @@ typedef struct genfs {
 
 /* OCON_NUM needs to be the largest index in any platform's ocontext array */
 #define OCON_NUM   9
+
+/* filename transitions table array indices */
+enum {
+	FILENAME_TRANS_MATCH_EXACT,
+	FILENAME_TRANS_MATCH_PREFIX,
+	FILENAME_TRANS_MATCH_SUFFIX,
+	FILENAME_TRANS_MATCH_NUM,
+};
 
 /* section: module information */
 
@@ -593,7 +602,7 @@ typedef struct policydb {
 	hashtab_t range_tr;
 
 	/* file transitions with the last path component */
-	hashtab_t filename_trans;
+	hashtab_t filename_trans[FILENAME_TRANS_MATCH_NUM];
 	uint32_t filename_trans_count;
 
 	ebitmap_t *type_attr_map;
@@ -657,7 +666,8 @@ extern int policydb_sort_ocontexts(policydb_t *p);
 extern int policydb_filetrans_insert(policydb_t *p, uint32_t stype,
 				     uint32_t ttype, uint32_t tclass,
 				     const char *name, char **name_alloc,
-				     uint32_t otype, uint32_t *present_otype);
+				     uint32_t otype, uint32_t match_type,
+				     uint32_t *present_otype);
 
 /* Deprecated */
 extern int policydb_context_isvalid(const policydb_t * p,
@@ -758,10 +768,11 @@ extern int policydb_set_target_platform(policydb_t *p, int platform);
 #define POLICYDB_VERSION_INFINIBAND		31 /* Linux-specific */
 #define POLICYDB_VERSION_GLBLUB		32
 #define POLICYDB_VERSION_COMP_FTRANS	33 /* compressed filename transitions */
+#define POLICYDB_VERSION_PREFIX_SUFFIX	34 /* prefix and suffix filename transitions */
 
 /* Range of policy versions we understand*/
 #define POLICYDB_VERSION_MIN	POLICYDB_VERSION_BASE
-#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_COMP_FTRANS
+#define POLICYDB_VERSION_MAX	POLICYDB_VERSION_PREFIX_SUFFIX
 
 /* Module versions and specific changes*/
 #define MOD_POLICYDB_VERSION_BASE		4
@@ -784,9 +795,10 @@ extern int policydb_set_target_platform(policydb_t *p, int platform);
 #define MOD_POLICYDB_VERSION_INFINIBAND		19
 #define MOD_POLICYDB_VERSION_GLBLUB		20
 #define MOD_POLICYDB_VERSION_SELF_TYPETRANS	21
+#define MOD_POLICYDB_VERSION_PREFIX_SUFFIX	22
 
 #define MOD_POLICYDB_VERSION_MIN MOD_POLICYDB_VERSION_BASE
-#define MOD_POLICYDB_VERSION_MAX MOD_POLICYDB_VERSION_SELF_TYPETRANS
+#define MOD_POLICYDB_VERSION_MAX MOD_POLICYDB_VERSION_PREFIX_SUFFIX
 
 #define POLICYDB_CONFIG_MLS    1
 
