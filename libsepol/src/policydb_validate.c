@@ -1472,6 +1472,15 @@ static int validate_filename_trans_rules(sepol_handle_t *handle, const filename_
 		if (validate_simpletype(filename_trans->otype, p, flavors))
 			goto bad;
 
+		switch (filename_trans->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+		case FILENAME_TRANS_MATCH_PREFIX:
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			break;
+		default:
+			goto bad;
+		}
+
 		/* currently only the RULE_SELF flag can be set */
 		if ((filename_trans->flags & ~RULE_SELF) != 0)
 			goto bad;

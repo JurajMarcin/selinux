@@ -342,6 +342,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	 .target_platform = SEPOL_TARGET_SELINUX,
 	},
 	{
+	 .type = POLICY_BASE,
+	 .version = MOD_POLICYDB_VERSION_PREFIX_SUFFIX,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = OCON_IBENDPORT + 1,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
 	 .type = POLICY_MOD,
 	 .version = MOD_POLICYDB_VERSION_BASE,
 	 .sym_num = SYM_NUM,
@@ -463,6 +470,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	{
 	 .type = POLICY_MOD,
 	 .version = MOD_POLICYDB_VERSION_SELF_TYPETRANS,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = 0,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
+	 .type = POLICY_MOD,
+	 .version = MOD_POLICYDB_VERSION_PREFIX_SUFFIX,
 	 .sym_num = SYM_NUM,
 	 .ocon_num = 0,
 	 .target_platform = SEPOL_TARGET_SELINUX,
@@ -3771,7 +3785,7 @@ static int role_allow_rule_read(role_allow_rule_t ** r, struct policy_file *fp)
 static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 				    struct policy_file *fp)
 {
-	uint32_t buf[3], nel, i, len;
+	uint32_t buf[4], nel, i, len;
 	unsigned int entries;
 	filename_trans_rule_t *ftr, *lftr;
 	int rc;
@@ -3810,7 +3824,9 @@ static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 		if (type_set_read(&ftr->ttypes, fp))
 			return -1;
 
-		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
+		if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX)
+			entries = 4;
+		else if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
 			entries = 3;
 		else
 			entries = 2;
@@ -3822,6 +3838,8 @@ static int filename_trans_rule_read(policydb_t *p, filename_trans_rule_t **r,
 		ftr->otype = le32_to_cpu(buf[1]);
 		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS)
 			ftr->flags = le32_to_cpu(buf[2]);
+		if (p->policyvers >=  MOD_POLICYDB_VERSION_PREFIX_SUFFIX)
+			ftr->match_type = le32_to_cpu(buf[3]);
 	}
 
 	return 0;

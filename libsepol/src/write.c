@@ -1950,7 +1950,7 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 {
 	int nel = 0;
 	size_t items, entries;
-	uint32_t buf[3], len;
+	uint32_t buf[4], len;
 	filename_trans_rule_t *ftr;
 
 	for (ftr = t; ftr; ftr = ftr->next)
@@ -1980,8 +1980,11 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 		buf[0] = cpu_to_le32(ftr->tclass);
 		buf[1] = cpu_to_le32(ftr->otype);
 		buf[2] = cpu_to_le32(ftr->flags);
+		buf[3] = cpu_to_le32(ftr->match_type);
 
-		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS) {
+		if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX) {
+			entries = 4;
+		} else if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS) {
 			entries = 3;
 		} else if (!(ftr->flags & RULE_SELF)) {
 			entries = 2;
