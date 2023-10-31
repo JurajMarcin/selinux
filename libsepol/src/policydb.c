@@ -209,6 +209,13 @@ static const struct policydb_compat_info policydb_compat[] = {
 	 .target_platform = SEPOL_TARGET_SELINUX,
 	},
 	{
+	 .type = POLICY_KERN,
+	 .version = POLICYDB_VERSION_PREFIX_SUFFIX,
+	 .sym_num = SYM_NUM,
+	 .ocon_num = OCON_IBENDPORT + 1,
+	 .target_platform = SEPOL_TARGET_SELINUX,
+	},
+	{
 	 .type = POLICY_BASE,
 	 .version = MOD_POLICYDB_VERSION_BASE,
 	 .sym_num = SYM_NUM,
@@ -2813,7 +2820,8 @@ err:
 	return -1;
 }
 
-static int filename_trans_read(policydb_t *p, struct policy_file *fp)
+static int filename_trans_read(policydb_t *p, struct policy_file *fp,
+			       uint32_t match_type)
 {
 	unsigned int i;
 	uint32_t buf[1], nel;
@@ -2826,15 +2834,17 @@ static int filename_trans_read(policydb_t *p, struct policy_file *fp)
 
 	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
 		for (i = 0; i < nel; i++) {
+			/*
+			 * this version does not have other than exact match
+			 * transitions
+			 */
 			rc = filename_trans_read_one_compat(p, fp);
 			if (rc < 0)
 				return -1;
 		}
 	} else {
 		for (i = 0; i < nel; i++) {
-			rc = filename_trans_read_one(p,
-						     FILENAME_TRANS_MATCH_EXACT,
-						     fp);
+			rc = filename_trans_read_one(p, match_type, fp);
 			if (rc < 0)
 				return -1;
 		}
@@ -4374,7 +4384,11 @@ int policydb_read(policydb_t * p, struct policy_file *fp, unsigned verbose)
 		if (role_allow_read(&p->role_allow, fp))
 			goto bad;
 		if (r_policyvers >= POLICYDB_VERSION_FILENAME_TRANS &&
-		    filename_trans_read(p, fp))
+		    filename_trans_read(p, fp, FILENAME_TRANS_MATCH_EXACT))
+			goto bad;
+		if (r_policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX &&
+		    (filename_trans_read(p, fp, FILENAME_TRANS_MATCH_PREFIX) ||
+		     filename_trans_read(p, fp, FILENAME_TRANS_MATCH_SUFFIX)))
 			goto bad;
 	} else {
 		/* first read the AV rule blocks, then the scope tables */

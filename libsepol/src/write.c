@@ -2383,6 +2383,20 @@ int policydb_write(policydb_t * p, struct policy_file *fp)
 			if (p->filename_trans[FILENAME_TRANS_MATCH_EXACT])
 				WARN(fp->handle, "Discarding filename type transition rules");
 		}
+		if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+			if (filename_trans_write(p, FILENAME_TRANS_MATCH_PREFIX,
+						 fp) ||
+			    filename_trans_write(p, FILENAME_TRANS_MATCH_SUFFIX,
+						 fp))
+				return POLICYDB_ERROR;
+		} else {
+			if (p->filename_trans[FILENAME_TRANS_MATCH_PREFIX])
+				WARN(fp->handle,
+				     "Discarding prefix filename type transition rules");
+			if (p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX])
+				WARN(fp->handle,
+				     "Discarding suffix filename type transition rules");
+		}
 	} else {
 		if (avrule_block_write(p->global, num_syms, p, fp) == -1) {
 			return POLICYDB_ERROR;
