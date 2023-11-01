@@ -1970,6 +1970,20 @@ static int write_filename_trans_rules_to_cil(FILE *out, struct policydb *pdb)
 		goto exit;
 	}
 
+	args.match_type = FILENAME_TRANS_MATCH_PREFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+	
+	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+
 	strs_sort(strs);
 	strs_write_each(strs, out);
 
