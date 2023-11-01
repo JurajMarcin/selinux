@@ -1927,9 +1927,23 @@ static int write_filename_trans_rules_to_conf(FILE *out, struct policydb *pdb)
 
 	args.pdb = pdb;
 	args.strs = strs;
-	args.match_type = FILENAME_TRANS_MATCH_EXACT;
 
+	args.match_type = FILENAME_TRANS_MATCH_EXACT;
 	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+
+	args.match_type = FILENAME_TRANS_MATCH_PREFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+			 map_filename_trans_to_str, &args);
+	if (rc != 0) {
+		goto exit;
+	}
+
+	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
+	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
 			 map_filename_trans_to_str, &args);
 	if (rc != 0) {
 		goto exit;
