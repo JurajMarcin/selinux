@@ -514,6 +514,12 @@ static void display_filename_trans(policydb_t *p, FILE *fp)
 	args.match_type = FILENAME_TRANS_MATCH_EXACT;
 	hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_EXACT],
 		    filenametr_display, &args);
+	args.match_type = FILENAME_TRANS_MATCH_PREFIX;
+	hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+		    filenametr_display, &args);
+	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
+	hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+		    filenametr_display, &args);
 }
 
 static int menu(void)
