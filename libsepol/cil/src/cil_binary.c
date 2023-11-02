@@ -1182,8 +1182,7 @@ static int __cil_typetransition_to_avtab_helper(policydb_t *pdb,
 		rc = policydb_filetrans_insert(
 			pdb, sepol_src->s.value, sepol_tgt->s.value,
 			sepol_obj->s.value, name, NULL,
-			sepol_result->s.value, match_type,
-			&otype
+			sepol_result->s.value, match_type, &otype
 		);
 		if (rc != SEPOL_OK) {
 			if (rc == SEPOL_EEXIST) {
