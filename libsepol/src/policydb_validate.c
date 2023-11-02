@@ -1241,14 +1241,23 @@ static int validate_filename_trans_hashtab(sepol_handle_t *handle, const policyd
 {
 	map_arg_t margs = { flavors, handle, p };
 
-	for (uint32_t i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
-		if (hashtab_map(p->filename_trans[i], validate_filename_trans, &margs)) {
-			ERR(handle, "Invalid filename trans");
-			return -1;
-		}
+	if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+			validate_filename_trans, &margs))
+		goto bad;
+
+	if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+				validate_filename_trans, &margs))
+			goto bad;
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+				validate_filename_trans, &margs))
+			goto bad;
 	}
 
 	return 0;
+bad:
+	ERR(handle, "Invalid filename trans");
+	return -1;
 }
 
 static int validate_context(const context_struct_t *con, validate_t flavors[], int mls)
