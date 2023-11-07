@@ -930,7 +930,7 @@ int policydb_init(policydb_t * p)
 	if (rc)
 		goto err;
 
-	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
 		p->filename_trans[i] = hashtab_create(filenametr_hash,
 						      filenametr_cmp,
 						      (1 << 10));
@@ -951,7 +951,7 @@ int policydb_init(policydb_t * p)
 
 	return 0;
 err:
-	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
 		hashtab_destroy(p->filename_trans[i]);
 	}
 	hashtab_destroy(p->range_tr);
@@ -1593,7 +1593,7 @@ void policydb_destroy(policydb_t * p)
 	if (lra)
 		free(lra);
 
-	for (i = 0; i <= FILENAME_TRANS_MATCH_SUFFIX; i++) {
+	for (i = 0; i < FILENAME_TRANS_MATCH_NUM; i++) {
 		hashtab_map(p->filename_trans[i], filenametr_destroy, NULL);
 		hashtab_destroy(p->filename_trans[i]);
 	}

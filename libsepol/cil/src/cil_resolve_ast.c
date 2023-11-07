@@ -673,6 +673,8 @@ int cil_resolve_nametypetransition(struct cil_tree_node *current, struct cil_db 
 		nametypetrans->match_type = FILENAME_TRANS_MATCH_SUFFIX;
 	} else {
 		cil_tree_log(current, CIL_ERR, "Invalid name match type \"%s\"", nametypetrans->match_type_str);
+		rc = SEPOL_ERR;
+		goto exit;
 	}
 
 	rc = cil_resolve_name(current, nametypetrans->result_str, CIL_SYM_TYPES, db, &result_datum);

@@ -314,9 +314,6 @@ typedef struct role_allow_rule {
 	struct role_allow_rule *next;
 } role_allow_rule_t;
 
-#define FILENAME_TRANS_MATCH_EXACT 0
-#define FILENAME_TRANS_MATCH_PREFIX 1
-#define FILENAME_TRANS_MATCH_SUFFIX 2
 typedef struct filename_trans_rule {
 	uint32_t flags; /* may have RULE_SELF set */
 	type_set_t stypes;
@@ -426,6 +423,14 @@ typedef struct genfs {
 
 /* OCON_NUM needs to be the largest index in any platform's ocontext array */
 #define OCON_NUM   9
+
+/* filename transitions table array indices */
+enum {
+	FILENAME_TRANS_MATCH_EXACT,
+	FILENAME_TRANS_MATCH_PREFIX,
+	FILENAME_TRANS_MATCH_SUFFIX,
+	FILENAME_TRANS_MATCH_NUM,
+};
 
 /* section: module information */
 
@@ -597,7 +602,7 @@ typedef struct policydb {
 	hashtab_t range_tr;
 
 	/* file transitions with the last path component */
-	hashtab_t filename_trans[FILENAME_TRANS_MATCH_SUFFIX + 1];
+	hashtab_t filename_trans[FILENAME_TRANS_MATCH_NUM];
 	uint32_t filename_trans_count;
 
 	ebitmap_t *type_attr_map;
