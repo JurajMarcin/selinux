@@ -1976,7 +1976,7 @@ static int write_filename_trans_rules_to_cil(FILE *out, struct policydb *pdb)
 	if (rc != 0) {
 		goto exit;
 	}
-	
+
 	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
 	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
 			 map_filename_trans_to_str, &args);
