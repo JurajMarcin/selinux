@@ -603,7 +603,7 @@ typedef struct policydb {
 
 	/* file transitions with the last path component */
 	hashtab_t filename_trans[FILENAME_TRANS_MATCH_NUM];
-	uint32_t filename_trans_count;
+	uint32_t filename_trans_exact_count;
 
 	ebitmap_t *type_attr_map;
 

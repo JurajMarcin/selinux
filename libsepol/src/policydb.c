@@ -2669,7 +2669,14 @@ int policydb_filetrans_insert(policydb_t *p, uint32_t stype, uint32_t ttype,
 		}
 	}
 
-	p->filename_trans_count++;
+        /*
+         * We need to keep track of the number of exact match filename
+	 * transitions for writing them in uncompressed format in older binary
+	 * policy versions. Other match types were not supported back then, so
+	 * it is not needed.
+         */
+        if (match_type == FILENAME_TRANS_MATCH_EXACT)
+		p->filename_trans_exact_count++;
 	return ebitmap_set_bit(&datum->stypes, stype - 1, 1);
 }
 
@@ -2799,7 +2806,14 @@ static int filename_trans_read_one(policydb_t *p, uint32_t match_type,
 
 		datum->otype = le32_to_cpu(buf[0]);
 
-		p->filename_trans_count += ebitmap_cardinality(&datum->stypes);
+		/*
+		 * We need to keep track of the number of exact match filename
+		 * transitions for writing them in uncompressed format in older
+		 * binary policy versions. Other match types were not supported
+		 * back then, so it is not needed
+		 */
+		if (match_type == FILENAME_TRANS_MATCH_EXACT)
+			p->filename_trans_exact_count += ebitmap_cardinality(&datum->stypes);
 
 		dst = &datum->next;
 	}

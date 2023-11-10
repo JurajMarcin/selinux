@@ -668,7 +668,7 @@ static int filename_trans_write(struct policydb *p, uint32_t match_type,
 		 * This version does not have other than exact match
 		 * transitions, there is no need to count other ones.
 		 */
-		buf[0] = cpu_to_le32(p->filename_trans_count);
+		buf[0] = cpu_to_le32(p->filename_trans_exact_count);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
 		if (items != 1)
 			return POLICYDB_ERROR;
