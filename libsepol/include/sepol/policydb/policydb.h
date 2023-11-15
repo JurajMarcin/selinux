@@ -321,6 +321,7 @@ typedef struct filename_trans_rule {
 	uint32_t tclass;
 	char *name;
 	uint32_t otype;	/* new type */
+ 	/* name match type, values from enum filename_trans_match_type */
 	uint32_t match_type;
 	struct filename_trans_rule *next;
 } filename_trans_rule_t;
@@ -425,7 +426,7 @@ typedef struct genfs {
 #define OCON_NUM   9
 
 /* filename transitions table array indices */
-enum {
+enum filename_trans_match_type {
 	FILENAME_TRANS_MATCH_EXACT,
 	FILENAME_TRANS_MATCH_PREFIX,
 	FILENAME_TRANS_MATCH_SUFFIX,
