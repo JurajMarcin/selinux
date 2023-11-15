@@ -1952,9 +1952,23 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 	size_t items, entries;
 	uint32_t buf[4], len;
 	filename_trans_rule_t *ftr;
+	int discarding = 0;
 
-	for (ftr = t; ftr; ftr = ftr->next)
-		nel++;
+	if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX) {
+		for (ftr = t; ftr; ftr = ftr->next)
+			nel++;
+	} else {
+		for (ftr = t; ftr; ftr = ftr->next) {
+			if (ftr->match_type == FILENAME_TRANS_MATCH_EXACT)
+				nel++;
+			else
+				discarding = 1;
+		}
+		if (discarding) {
+			WARN(fp->handle,
+			     "Discarding prefix/suffix filename type transition rules");
+		}
+	}
 
 	buf[0] = cpu_to_le32(nel);
 	items = put_entry(buf, sizeof(uint32_t), 1, fp);
@@ -1962,6 +1976,9 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 		return POLICYDB_ERROR;
 
 	for (ftr = t; ftr; ftr = ftr->next) {
+		if (p->policyvers < MOD_POLICYDB_VERSION_PREFIX_SUFFIX &&
+		    ftr->match_type != FILENAME_TRANS_MATCH_EXACT)
+			continue;
 		len = strlen(ftr->name);
 		buf[0] = cpu_to_le32(len);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
