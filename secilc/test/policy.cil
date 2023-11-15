@@ -134,6 +134,8 @@
 	(typetransition device_t exec_type files console_device_t)
 	(typetransition exec_type self files console_device_t)
 	(typetransition exec_type self files "filename" console_device_t)
+	(typetransition exec_type self files "filename" prefix console_device_t)
+	(typetransition exec_type self files "filename" suffix console_device_t)
 	(typechange console_device_t device_t file user_tty_device_t)
 	(typechange exec_type device_t file user_tty_device_t)
 	(typechange exec_type self file console_device_t)
@@ -153,6 +155,8 @@
 	(rangetransition device_t kernel_t file ((s0) (s3 (not c3))))
 
 	(typetransition device_t console_t file "some_file" getty_t)
+	(typetransition device_t console_t file "some_file" prefix getty_t)
+	(typetransition device_t console_t file "some_file" suffix getty_t)
 	
 	(allow foo_type self (file (execute)))
 	(allow bin_t device_t (file (execute)))
