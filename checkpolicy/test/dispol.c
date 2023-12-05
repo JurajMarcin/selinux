@@ -475,6 +475,7 @@ static int filenametr_display(hashtab_key_t key,
 	FILE *fp = args->fp;
 	ebitmap_node_t *node;
 	uint32_t bit;
+	const char *match_str = args->match_str;
 
 	do {
 		ebitmap_for_each_positive_bit(&ftdatum->stypes, node, bit) {
@@ -482,7 +483,7 @@ static int filenametr_display(hashtab_key_t key,
 			display_id(p, fp, SYM_TYPES, ft->ttype - 1, "");
 			display_id(p, fp, SYM_CLASSES, ft->tclass - 1, ":");
 			display_id(p, fp, SYM_TYPES, ftdatum->otype - 1, "");
-			fprintf(fp, " %s%s\n", ft->name, args->match_str);
+			fprintf(fp, " %s%s\n", ft->name, match_str);
 		}
 		ftdatum = ftdatum->next;
 	} while (ftdatum);

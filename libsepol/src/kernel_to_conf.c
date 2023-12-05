@@ -1864,7 +1864,7 @@ exit:
 
 struct map_filename_trans_args {
 	struct policydb *pdb;
-	uint32_t match_type;
+	const char *match_str;
 	struct strs *strs;
 };
 
@@ -1879,19 +1879,7 @@ static int map_filename_trans_to_str(hashtab_key_t key, void *data, void *arg)
 	struct ebitmap_node *node;
 	uint32_t bit;
 	int rc;
-	const char *match_str = "";
-
-	switch (map_args->match_type) {
-	case FILENAME_TRANS_MATCH_EXACT:
-		match_str = "";
-		break;
-	case FILENAME_TRANS_MATCH_PREFIX:
-		match_str = " prefix";
-		break;
-	case FILENAME_TRANS_MATCH_SUFFIX:
-		match_str = " suffix";
-		break;
-	}
+	const char *match_str = map_args->match_str;
 
 	tgt = pdb->p_type_val_to_name[ft->ttype - 1];
 	class = pdb->p_class_val_to_name[ft->tclass - 1];
@@ -1928,21 +1916,21 @@ static int write_filename_trans_rules_to_conf(FILE *out, struct policydb *pdb)
 	args.pdb = pdb;
 	args.strs = strs;
 
-	args.match_type = FILENAME_TRANS_MATCH_EXACT;
+	args.match_str = "";
 	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_EXACT],
 			 map_filename_trans_to_str, &args);
 	if (rc != 0) {
 		goto exit;
 	}
 
-	args.match_type = FILENAME_TRANS_MATCH_PREFIX;
+	args.match_str = " prefix";
 	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
 			 map_filename_trans_to_str, &args);
 	if (rc != 0) {
 		goto exit;
 	}
 
-	args.match_type = FILENAME_TRANS_MATCH_SUFFIX;
+	args.match_str = " suffix";
 	rc = hashtab_map(pdb->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
 			 map_filename_trans_to_str, &args);
 	if (rc != 0) {
