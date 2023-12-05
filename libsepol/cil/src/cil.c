@@ -2465,7 +2465,6 @@ void cil_nametypetransition_init(struct cil_nametypetransition **nametypetrans)
 	(*nametypetrans)->obj = NULL;
 	(*nametypetrans)->name_str = NULL;
 	(*nametypetrans)->name = NULL;
-	(*nametypetrans)->match_type_str = NULL;
 	(*nametypetrans)->match_type = FILENAME_TRANS_MATCH_EXACT;
 	(*nametypetrans)->result_str = NULL;
 	(*nametypetrans)->result = NULL;

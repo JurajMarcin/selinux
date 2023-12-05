@@ -3438,7 +3438,14 @@ int cil_gen_typetransition(struct cil_db *db, struct cil_tree_node *parse_curren
 		nametypetrans->name_str = s4;
 		nametypetrans->name = cil_gen_declared_string(db, s4, ast_node);
 		if (s6) {
-			nametypetrans->match_type_str = s5;
+			if (s5 == CIL_KEY_PREFIX) {
+				nametypetrans->match_type = FILENAME_TRANS_MATCH_PREFIX;
+			} else if (s5 == CIL_KEY_SUFFIX) {
+				nametypetrans->match_type = FILENAME_TRANS_MATCH_SUFFIX;
+			} else {
+				rc = SEPOL_ERR;
+				goto exit;
+			}
 			nametypetrans->result_str = s6;
 		} else {
 			nametypetrans->result_str = s5;

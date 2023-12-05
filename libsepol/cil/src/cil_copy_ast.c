@@ -723,7 +723,7 @@ int cil_copy_nametypetransition(__attribute__((unused)) struct cil_db *db, void 
 	new->obj_str = orig->obj_str;
 	new->name_str = orig->name_str;
 	new->name = orig->name;
-	new->match_type_str = orig->match_type_str;
+	new->match_type = orig->match_type;
 	new->result_str = orig->result_str;
 
 

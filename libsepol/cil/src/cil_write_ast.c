@@ -1217,8 +1217,16 @@ void cil_write_ast_node(FILE *out, struct cil_tree_node *node)
 		} else {
 			fprintf(out, "%s ", rule->name_str);
 		}
-		if (rule->match_type != FILENAME_TRANS_MATCH_EXACT)
-			fprintf(out, "%s ", rule->match_type_str);
+		switch (rule->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+			break;
+		case FILENAME_TRANS_MATCH_PREFIX:
+			fprintf(out, "prefix ");
+			break;
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			fprintf(out, "suffix ");
+			break;
+		}
 		fprintf(out, "%s", datum_or_str(DATUM(rule->result), rule->result_str));
 		fprintf(out, ")\n");
 		break;

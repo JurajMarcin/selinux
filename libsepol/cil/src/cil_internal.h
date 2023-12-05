@@ -590,7 +590,6 @@ struct cil_nametypetransition {
 	struct cil_class *obj;
 	char *name_str;
 	struct cil_symtab_datum *name;
-	char *match_type_str;
 	uint32_t match_type;
 	char *result_str;
 	void *result; /* type or alias */
