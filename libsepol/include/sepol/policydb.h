@@ -87,6 +87,11 @@ extern int sepol_policydb_set_typevers(sepol_policydb_t * p, unsigned int type);
  */
 extern int sepol_policydb_set_vers(sepol_policydb_t * p, unsigned int vers);
 
+/*
+ * Get the policy version.
+ */
+extern unsigned int sepol_policydb_get_vers(sepol_policydb_t *p);
+
 /* Set how to handle unknown class/perms. */
 #define SEPOL_DENY_UNKNOWN	    0
 #define SEPOL_REJECT_UNKNOWN	    2
@@ -94,11 +99,17 @@ extern int sepol_policydb_set_vers(sepol_policydb_t * p, unsigned int vers);
 extern int sepol_policydb_set_handle_unknown(sepol_policydb_t * p,
 					     unsigned int handle_unknown);
 
+/* Get how to handle unknown class/perms. */
+extern unsigned int sepol_policydb_get_handle_unknown(sepol_policydb_t *p);
+
 /* Set the target platform */
 #define SEPOL_TARGET_SELINUX 0
 #define SEPOL_TARGET_XEN     1
 extern int sepol_policydb_set_target_platform(sepol_policydb_t * p,
 					     int target_platform);
+
+/* Get the target platform. */
+extern int sepol_policydb_get_target_platform(sepol_policydb_t *p);
 
 /*
  * Optimize the policy by removing redundant rules.

@@ -3,6 +3,7 @@
 #include "debug.h"
 #include <sepol/policydb/policydb.h>
 #include "policydb_internal.h"
+#include "sepol/policydb.h"
 
 /* Policy file interfaces. */
 
@@ -133,6 +134,11 @@ int sepol_policydb_set_vers(sepol_policydb_t * sp, unsigned int vers)
 	return 0;
 }
 
+unsigned int sepol_policydb_get_vers(sepol_policydb_t *sp)
+{
+	return sp->p.policyvers;
+}
+
 int sepol_policydb_set_handle_unknown(sepol_policydb_t * sp,
 				      unsigned int handle_unknown)
 {
@@ -151,6 +157,11 @@ int sepol_policydb_set_handle_unknown(sepol_policydb_t * sp,
 	return 0;
 }
 
+unsigned int sepol_policydb_get_handle_unknown(sepol_policydb_t *sp)
+{
+	return sp->p.handle_unknown;
+}
+
 int sepol_policydb_set_target_platform(sepol_policydb_t * sp,
 				      int target_platform)
 {
@@ -166,6 +177,11 @@ int sepol_policydb_set_target_platform(sepol_policydb_t * sp,
 
 	p->target_platform = target_platform;		
 	return 0;
+}
+
+int sepol_policydb_get_target_platform(sepol_policydb_t *sp)
+{
+	return sp->p.target_platform;
 }
 
 int sepol_policydb_optimize(sepol_policydb_t * p)
