@@ -10,6 +10,9 @@
 extern "C" {
 #endif
 
+struct sepol_user_iter;
+typedef struct sepol_user_iter sepol_user_iter_t;
+
 /* Modify the user, or add it, if the key is not found */
 extern int sepol_user_modify(sepol_handle_t * handle,
 			     sepol_policydb_t * policydb,
@@ -40,6 +43,14 @@ extern int sepol_user_iterate(sepol_handle_t * handle,
 			      const sepol_policydb_t * policydb,
 			      int (*fn) (const sepol_user_t * user,
 					 void *fn_arg), void *arg);
+
+/* Users iterator */
+extern int sepol_user_iter_create(sepol_handle_t *handle,
+				  const sepol_policydb_t *p,
+				  sepol_user_iter_t **iter);
+extern void sepol_user_iter_destroy(sepol_user_iter_t *iter);
+extern int sepol_user_iter_next(sepol_handle_t *handle, sepol_user_iter_t *iter,
+				sepol_user_t **item);
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,5 @@
+#include <sepol/users.h>
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -11,6 +13,11 @@
 #include <sepol/policydb/expand.h>
 #include "user_internal.h"
 #include "mls.h"
+
+struct sepol_user_iter {
+	const policydb_t *policydb;
+	uint32_t idx;
+};
 
 static int user_to_record(sepol_handle_t * handle,
 			  const policydb_t * policydb,
@@ -376,4 +383,43 @@ int sepol_user_iterate(sepol_handle_t * handle,
 	ERR(handle, "could not iterate over users");
 	sepol_user_free(user);
 	return STATUS_ERR;
+}
+
+/* Users iterator */
+int sepol_user_iter_create(sepol_handle_t *handle, const sepol_policydb_t *p,
+			   sepol_user_iter_t **iter)
+{
+	sepol_user_iter_t *new_iter = malloc(sizeof(sepol_user_iter_t));
+	if (!new_iter) {
+		ERR(handle, "out of memory");
+		return STATUS_ERR;
+	}
+	new_iter->policydb = &p->p;
+	new_iter->idx = 0;
+
+	*iter = new_iter;
+	return STATUS_SUCCESS;
+}
+
+void sepol_user_iter_destroy(sepol_user_iter_t *iter)
+{
+	free(iter);
+}
+
+int sepol_user_iter_next(sepol_handle_t *handle, sepol_user_iter_t *iter,
+			 sepol_user_t **item)
+{
+	if (iter->idx >= iter->policydb->p_users.nprim) {
+		*item = NULL;
+		return STATUS_SUCCESS;
+	}
+	sepol_user_t *user;
+	int status = user_to_record(handle, iter->policydb, iter->idx, &user);
+	if (status)
+		return status;
+	
+	iter->idx++;
+	*item = user;
+
+	return STATUS_SUCCESS;
 }
