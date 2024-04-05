@@ -270,3 +270,38 @@ void hashtab_hash_eval(hashtab_t h, const char *tag)
 	     tag, h->nel, slots_used, h->size, max_chain_len, chain2_len_sum,
 	     chain2_len_sum ? (float)chain2_len_sum / slots_used : 0);
 }
+
+static void hashtab_iter_advance(hashtab_iter_t *iter)
+{
+	if (iter->curr && iter->curr->next) {
+		iter->curr = iter->curr->next;
+		return;
+	}
+	iter->curr = NULL;
+	do {
+		iter->bucket++;
+	} while (iter->bucket < iter->table->size &&
+		 (iter->curr = iter->table->htable[iter->bucket]) == NULL);
+}
+
+void hashtab_iter_init(hashtab_t table, hashtab_iter_t *iter)
+{
+	memset(iter, 0, sizeof(hashtab_iter_t));
+	iter->table = table;
+	iter->curr = table->htable[0];
+	if (!iter->curr)
+		hashtab_iter_advance(iter);
+}
+
+void hashtab_iter_next(hashtab_iter_t *iter, hashtab_key_t *key,
+                       hashtab_datum_t *datum) {
+        hashtab_node_t *node = iter->curr;
+	hashtab_iter_advance(iter);
+	if (node) {
+		*key = node->key;
+		*datum = node->datum;
+	} else {
+		*key = NULL;
+		*datum = NULL;
+	}
+}
