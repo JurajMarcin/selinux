@@ -87,5 +87,9 @@ int iter_add_tests(CU_pSuite suite)
 		CU_cleanup_registry();
 		return CU_get_error();
 	}
+	if (CU_add_test(suite, "iter_roles_non_empty", test_iter_roles_non_empty) == NULL) {
+		CU_cleanup_registry();
+		return CU_get_error();
+	}
 	return 0;
 }
