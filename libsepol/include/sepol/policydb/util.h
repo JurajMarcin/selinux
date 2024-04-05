@@ -42,6 +42,19 @@ char *sepol_extended_perms_to_string(const avtab_extended_perms_t *xperms);
  */
 extern int tokenize(const char *line_buf, char delim, int num_args, ...);
 
+extern int string_list_contains(char ** const list, uint32_t num,
+				const char *string);
+extern int string_list_add(sepol_handle_t *handle, char ***list, uint32_t *num,
+			   const char *string);
+extern int string_list_del(char **list, uint32_t *num, const char *string);
+extern int string_list_scopy(sepol_handle_t *handle, char **list, uint32_t num,
+			     const char ***copy, uint32_t *num_copy);
+
+/*
+ * Compare indirect strings (in qsort)
+ */
+int strcmp_qsort(const void *str1, const void *str2);
+
 #ifdef __cplusplus
 }
 #endif

@@ -27,7 +27,9 @@
 #include <sepol/policydb/flask_types.h>
 #include <sepol/policydb/policydb.h>
 #include <sepol/policydb/util.h>
+#include <string.h>
 
+#include "debug.h"
 #include "private.h"
 
 struct val_to_name {
@@ -315,4 +317,70 @@ int tokenize(const char *line_buf, char delim, int num_args, ...)
 exit:
 	va_end(ap);
 	return items;
+}
+
+int string_list_contains(char ** const list, uint32_t num, const char *string)
+{
+	for (uint32_t i = 0; i < num; i++) {
+		if (!strcmp(list[i], string))
+			return 1;
+	}
+	return 0;
+}
+
+int string_list_add(sepol_handle_t *handle, char ***list, uint32_t *num,
+		    const char *string)
+{
+	char **tmp = reallocarray(*list, *num + 1, sizeof(const char *));
+	if (!tmp)
+		goto omem;
+	*list = tmp;
+
+	(*list)[*num] = strdup(string);
+	if (!(*list)[*num])
+		goto omem;
+	(*num)++;
+
+	return STATUS_SUCCESS;
+
+omem:
+	ERR(handle, "out of memory");
+	// tmp is assigned to list
+	return STATUS_ERR;
+}
+
+int string_list_del(char **list, uint32_t *num, const char *string)
+{
+	for (uint32_t i = 0; i < *num; i++) {
+		if (!strcmp(list[i], string)) {
+			free(list[i]);
+			list[i] = list[*num - 1];
+			(*num)--;
+		}
+	}
+	return STATUS_SUCCESS;
+}
+
+/* shallow copy, does not copy strings in the list */
+int string_list_scopy(sepol_handle_t *handle, char **list, uint32_t num,
+		      const char ***copy, uint32_t *num_copy)
+{
+	const char **tmp = calloc(num, sizeof(char *));
+	if (!tmp) {
+		ERR(handle, "out of memory");
+		return STATUS_ERR;
+	}
+
+	for (uint32_t i = 0; i < num; i++)
+		tmp[i] = list[i];
+	
+	*copy = tmp;
+	*num_copy = num;
+
+	return STATUS_SUCCESS;
+}
+
+int strcmp_qsort(const void *str1, const void *str2)
+{
+	return strcmp(*((const char **)str1), *((const char **)str2));
 }
