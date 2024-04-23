@@ -1440,6 +1440,7 @@ static int copy_filename_trans_list(filename_trans_rule_t * list,
 		new_rule->name = strdup(cur->name);
 		if (!new_rule->name)
 			goto err;
+		new_rule->match_type = cur->match_type;
 
 		if (type_set_or_convert(&cur->stypes, &new_rule->stypes, module) ||
 		    type_set_or_convert(&cur->ttypes, &new_rule->ttypes, module))

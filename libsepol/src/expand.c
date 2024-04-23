@@ -1419,18 +1419,31 @@ static int expand_filename_trans_helper(expand_state_t *state,
 	rc = policydb_filetrans_insert(
 		state->out, s + 1, t + 1,
 		rule->tclass, rule->name,
-		NULL, mapped_otype, &present_otype
+		NULL, mapped_otype, rule->match_type, &present_otype
 	);
 	if (rc == SEPOL_EEXIST) {
 		/* duplicate rule, ignore */
 		if (present_otype == mapped_otype)
 			return 0;
 
-		ERR(state->handle, "Conflicting name-based type_transition %s %s:%s \"%s\":  %s vs %s",
+		const char *match_str = "";
+		switch (rule->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+			match_str = "";
+			break;
+		case FILENAME_TRANS_MATCH_PREFIX:
+			match_str = " prefix";
+			break;
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			match_str = " suffix";
+			break;
+		}
+		ERR(state->handle, "Conflicting name-based type_transition %s %s:%s \"%s\"%s:  %s vs %s",
 		    state->out->p_type_val_to_name[s],
 		    state->out->p_type_val_to_name[t],
 		    state->out->p_class_val_to_name[rule->tclass - 1],
 		    rule->name,
+		    match_str,
 		    state->out->p_type_val_to_name[present_otype - 1],
 		    state->out->p_type_val_to_name[mapped_otype - 1]);
 		return -1;

@@ -1241,12 +1241,23 @@ static int validate_filename_trans_hashtab(sepol_handle_t *handle, const policyd
 {
 	map_arg_t margs = { flavors, handle, p };
 
-	if (hashtab_map(p->filename_trans, validate_filename_trans, &margs)) {
-		ERR(handle, "Invalid filename trans");
-		return -1;
+	if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_EXACT],
+			validate_filename_trans, &margs))
+		goto bad;
+
+	if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_PREFIX],
+				validate_filename_trans, &margs))
+			goto bad;
+		if (hashtab_map(p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX],
+				validate_filename_trans, &margs))
+			goto bad;
 	}
 
 	return 0;
+bad:
+	ERR(handle, "Invalid filename trans");
+	return -1;
 }
 
 static int validate_context(const context_struct_t *con, validate_t flavors[], int mls)
@@ -1469,6 +1480,15 @@ static int validate_filename_trans_rules(sepol_handle_t *handle, const filename_
 			goto bad;
 		if (validate_simpletype(filename_trans->otype, p, flavors))
 			goto bad;
+
+		switch (filename_trans->match_type) {
+		case FILENAME_TRANS_MATCH_EXACT:
+		case FILENAME_TRANS_MATCH_PREFIX:
+		case FILENAME_TRANS_MATCH_SUFFIX:
+			break;
+		default:
+			goto bad;
+		}
 
 		/* currently only the RULE_SELF flag can be set */
 		if ((filename_trans->flags & ~RULE_SELF) != 0)
