@@ -59,7 +59,7 @@ int define_role_trans(int class_specified);
 int define_role_types(void);
 int define_role_attr(void);
 int define_roleattribute(void);
-int define_filename_trans(void);
+int define_filename_trans(uint32_t match_type);
 int define_sens(void);
 int define_te_avtab(int which);
 int define_te_avtab_extended_perms(int which);

@@ -286,6 +286,10 @@ low |
 LOW				{ return(LOW); }
 glblub |
 GLBLUB				{ return(GLBLUB); }
+PREFIX |
+prefix				{ return(PREFIX); }
+SUFFIX |
+suffix				{ return(SUFFIX); }
 "/"[^ \n\r\t\f]*	        { return(PATH); }
 \""/"[^\"\n]*\" 		{ return(QPATH); }
 \"[^"/"\"\n]+\"	{ return(FILENAME); }

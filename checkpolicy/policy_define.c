@@ -3210,7 +3210,7 @@ avrule_t *define_cond_filename_trans(void)
 	return COND_ERR;
 }
 
-int define_filename_trans(void)
+int define_filename_trans(uint32_t match_type)
 {
 	char *id, *name = NULL;
 	type_set_t stypes, ttypes;
@@ -3312,7 +3312,7 @@ int define_filename_trans(void)
 			ebitmap_for_each_positive_bit(&e_ttypes, tnode, t) {
 				rc = policydb_filetrans_insert(
 					policydbp, s+1, t+1, c+1, name,
-					NULL, otype, NULL
+					NULL, otype, match_type, NULL
 				);
 				if (rc != SEPOL_OK) {
 					if (rc == SEPOL_EEXIST) {
@@ -3330,7 +3330,7 @@ int define_filename_trans(void)
 			if (self) {
 				rc = policydb_filetrans_insert(
 					policydbp, s+1, s+1, c+1, name,
-					NULL, otype, NULL
+					NULL, otype, match_type, NULL
 				);
 				if (rc != SEPOL_OK) {
 					if (rc == SEPOL_EEXIST) {
@@ -3368,6 +3368,7 @@ int define_filename_trans(void)
 		ftr->tclass = c + 1;
 		ftr->otype = otype;
 		ftr->flags = self ? RULE_SELF : 0;
+		ftr->match_type = match_type;
 	}
 
 	free(name);

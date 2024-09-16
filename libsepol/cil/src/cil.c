@@ -97,6 +97,8 @@ char *CIL_KEY_TUNABLEIF;
 char *CIL_KEY_ALLOW;
 char *CIL_KEY_DONTAUDIT;
 char *CIL_KEY_TYPETRANSITION;
+char *CIL_KEY_PREFIX;
+char *CIL_KEY_SUFFIX;
 char *CIL_KEY_TYPECHANGE;
 char *CIL_KEY_CALL;
 char *CIL_KEY_TUNABLE;
@@ -269,6 +271,8 @@ static void cil_init_keys(void)
 	CIL_KEY_ALLOW = cil_strpool_add("allow");
 	CIL_KEY_DONTAUDIT = cil_strpool_add("dontaudit");
 	CIL_KEY_TYPETRANSITION = cil_strpool_add("typetransition");
+	CIL_KEY_PREFIX = cil_strpool_add("prefix");
+	CIL_KEY_SUFFIX = cil_strpool_add("suffix");
 	CIL_KEY_TYPECHANGE = cil_strpool_add("typechange");
 	CIL_KEY_CALL = cil_strpool_add("call");
 	CIL_KEY_TUNABLE = cil_strpool_add("tunable");
@@ -2461,6 +2465,7 @@ void cil_nametypetransition_init(struct cil_nametypetransition **nametypetrans)
 	(*nametypetrans)->obj = NULL;
 	(*nametypetrans)->name_str = NULL;
 	(*nametypetrans)->name = NULL;
+	(*nametypetrans)->match_type = FILENAME_TRANS_MATCH_EXACT;
 	(*nametypetrans)->result_str = NULL;
 	(*nametypetrans)->result = NULL;
 }

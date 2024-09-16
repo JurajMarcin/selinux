@@ -653,7 +653,8 @@ static int filename_write_one(hashtab_key_t key, void *data, void *ptr)
 	return 0;
 }
 
-static int filename_trans_write(struct policydb *p, void *fp)
+static int filename_trans_write(struct policydb *p, uint32_t match_type,
+				void *fp)
 {
 	size_t items;
 	uint32_t buf[1];
@@ -663,20 +664,25 @@ static int filename_trans_write(struct policydb *p, void *fp)
 		return 0;
 
 	if (p->policyvers < POLICYDB_VERSION_COMP_FTRANS) {
-		buf[0] = cpu_to_le32(p->filename_trans_count);
+		/*
+		 * This version does not have other than exact match
+		 * transitions, there is no need to count other ones.
+		 */
+		buf[0] = cpu_to_le32(p->filename_trans_exact_count);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
 		if (items != 1)
 			return POLICYDB_ERROR;
 
-		rc = hashtab_map(p->filename_trans, filename_write_one_compat,
-				 fp);
+		rc = hashtab_map(p->filename_trans[match_type],
+				 filename_write_one_compat, fp);
 	} else {
-		buf[0] = cpu_to_le32(p->filename_trans->nel);
+		buf[0] = cpu_to_le32(p->filename_trans[match_type]->nel);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
 		if (items != 1)
 			return POLICYDB_ERROR;
 
-		rc = hashtab_map(p->filename_trans, filename_write_one, fp);
+		rc = hashtab_map(p->filename_trans[match_type],
+				 filename_write_one, fp);
 	}
 	return rc;
 }
@@ -1946,11 +1952,25 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 {
 	int nel = 0;
 	size_t items, entries;
-	uint32_t buf[3], len;
+	uint32_t buf[4], len;
 	filename_trans_rule_t *ftr;
+	int discarding = 0;
 
-	for (ftr = t; ftr; ftr = ftr->next)
-		nel++;
+	if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX) {
+		for (ftr = t; ftr; ftr = ftr->next)
+			nel++;
+	} else {
+		for (ftr = t; ftr; ftr = ftr->next) {
+			if (ftr->match_type == FILENAME_TRANS_MATCH_EXACT)
+				nel++;
+			else
+				discarding = 1;
+		}
+		if (discarding) {
+			WARN(fp->handle,
+			     "Discarding prefix/suffix filename type transition rules");
+		}
+	}
 
 	buf[0] = cpu_to_le32(nel);
 	items = put_entry(buf, sizeof(uint32_t), 1, fp);
@@ -1958,6 +1978,9 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 		return POLICYDB_ERROR;
 
 	for (ftr = t; ftr; ftr = ftr->next) {
+		if (p->policyvers < MOD_POLICYDB_VERSION_PREFIX_SUFFIX &&
+		    ftr->match_type != FILENAME_TRANS_MATCH_EXACT)
+			continue;
 		len = strlen(ftr->name);
 		buf[0] = cpu_to_le32(len);
 		items = put_entry(buf, sizeof(uint32_t), 1, fp);
@@ -1976,8 +1999,11 @@ static int filename_trans_rule_write(policydb_t *p, filename_trans_rule_t *t,
 		buf[0] = cpu_to_le32(ftr->tclass);
 		buf[1] = cpu_to_le32(ftr->otype);
 		buf[2] = cpu_to_le32(ftr->flags);
+		buf[3] = cpu_to_le32(ftr->match_type);
 
-		if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS) {
+		if (p->policyvers >= MOD_POLICYDB_VERSION_PREFIX_SUFFIX) {
+			entries = 4;
+		} else if (p->policyvers >= MOD_POLICYDB_VERSION_SELF_TYPETRANS) {
 			entries = 3;
 		} else if (!(ftr->flags & RULE_SELF)) {
 			entries = 2;
@@ -2375,11 +2401,28 @@ int policydb_write(policydb_t * p, struct policy_file *fp)
 		if (role_allow_write(p->role_allow, fp))
 			return POLICYDB_ERROR;
 		if (p->policyvers >= POLICYDB_VERSION_FILENAME_TRANS) {
-			if (filename_trans_write(p, fp))
+			if (filename_trans_write(p, FILENAME_TRANS_MATCH_EXACT,
+						 fp))
 				return POLICYDB_ERROR;
 		} else {
-			if (p->filename_trans)
+			if (p->filename_trans[FILENAME_TRANS_MATCH_EXACT])
 				WARN(fp->handle, "Discarding filename type transition rules");
+		}
+		if (p->policyvers >= POLICYDB_VERSION_PREFIX_SUFFIX) {
+			if (filename_trans_write(p, FILENAME_TRANS_MATCH_PREFIX,
+						 fp) ||
+			    filename_trans_write(p, FILENAME_TRANS_MATCH_SUFFIX,
+						 fp))
+				return POLICYDB_ERROR;
+		} else {
+			if (p->filename_trans[FILENAME_TRANS_MATCH_PREFIX] &&
+			    p->filename_trans[FILENAME_TRANS_MATCH_PREFIX]->nel)
+				WARN(fp->handle,
+				     "Discarding prefix filename type transition rules");
+			if (p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX] &&
+			    p->filename_trans[FILENAME_TRANS_MATCH_SUFFIX]->nel)
+				WARN(fp->handle,
+				     "Discarding suffix filename type transition rules");
 		}
 	} else {
 		if (avrule_block_write(p->global, num_syms, p, fp) == -1) {
